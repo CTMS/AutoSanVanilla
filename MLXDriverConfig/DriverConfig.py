@@ -1,21 +1,27 @@
 #!/bin/python3
 import os
-import subprocess
 import re
+import subprocess
 
-def run_command(command):
+
+def run_command(command, timeout=30):
     """
-    Execute a shell command and return the output.
+    Executes a shell command and returns the output.
+    Provides safe error handling and timeouts.
     """
     try:
-        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        print(f"Executing command: {' '.join(command)}")
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=timeout)
         if result.returncode != 0:
-            print(f"Command failed: {' '.join(command)}\nError: {result.stderr}")
+            print(f"Command failed: {' '.join(command)}\nError: {result.stderr.strip()}")
             return None
         return result.stdout.strip()
+    except subprocess.TimeoutExpired:
+        print(f"Command timed out: {' '.join(command)}")
     except Exception as e:
-        print(f"Error running command {command}: {e}")
-        return None
+        print(f"Unexpected error while running command {' '.join(command)}: {e}")
+    return None
+
 
 def get_mellanox_devices_truenas():
     """
@@ -23,7 +29,7 @@ def get_mellanox_devices_truenas():
     """
     print("Looking for Mellanox devices on TrueNAS...")
     lspci_output = run_command(["lspci", "-v"])
-    if lspci_output is None:
+    if not lspci_output:
         print("Failed to retrieve device list using lspci.")
         return []
 
@@ -37,123 +43,166 @@ def get_mellanox_devices_truenas():
 
     return devices
 
-def check_and_set_mellanox_device(binary_path, is_truenas):
+
+def parse_mst_devices(output):
     """
-    Check Mellanox devices and their settings, and set values if they do not match.
-    Adjusts the command paths and device detection method based on the system type.
+    Parse device list from `mst status` command output.
+    """
+    try:
+        lines = output.splitlines()
+        # Assume lines after the first two contain device information
+        devices = [line.strip() for line in lines[2:] if line.strip()]
+        return devices
+    except Exception as e:
+        print(f"Error parsing `mst status` output: {e}")
+        return []
+
+
+def get_mellanox_devices(binary_path, is_truenas):
+    """
+    Retrieves Mellanox devices based on the system type (TrueNAS or generic Linux).
+    """
+    if is_truenas:
+        return get_mellanox_devices_truenas()
+    else:
+        # Use `mst status` for non-TrueNAS systems
+        mst_status_output = run_command([os.path.join(binary_path, "mst"), "status"])
+        if not mst_status_output:
+            print("Failed to retrieve Mellanox device status.")
+            return []
+
+        print("mst status output:")
+        print(mst_status_output)
+        return parse_mst_devices(mst_status_output)
+
+
+def retrieve_device_settings(device, binary_path, is_truenas):
+    """
+    Retrieves the current settings for a Mellanox device.
+    """
+    command_prefix = [os.path.join(binary_path, "mstconfig")] if is_truenas else [os.path.join(binary_path, "mlxconfig")]
+    query_command = command_prefix + (["-d", device, "q"] if not is_truenas else ["-d", device])
+    return run_command(query_command)
+
+
+def update_device_settings(device, required_settings, current_settings, command_prefix):
+    """
+    Updates Mellanox device settings when they do not match required values.
+    If a setting is not found, it is skipped, and the user is notified.
+    """
+    print(f"Checking settings for device: {device}")
+    settings_to_update = []
+
+    # Check if settings need to be updated
+    for setting, expected_value in required_settings.items():
+        # Match the setting's current value in the output
+        match = re.search(fr"{setting}\s+([^\s]+)", current_settings)
+        if match:
+            current_value_raw = match.group(1)  # Extract raw value (e.g., 'False(0)', 'True(1)', '16')
+
+            # Extract the numeric value for comparison (e.g., 'False(0)' → '0', 'True(1)' → '1')
+            current_value_numeric = re.search(r"\((\d+)\)", current_value_raw)
+            if current_value_numeric:
+                current_value = current_value_numeric.group(1)  # Get numeric component
+            else:
+                current_value = current_value_raw  # Fall back to raw value if no numeric value
+
+            # Compare values as strings
+            expected_value = str(expected_value)  # Ensure expected value is a string
+            if current_value == expected_value:
+                print(f"{setting}: {current_value_raw} (OK)")
+            else:
+                print(f"{setting}: {current_value_raw} (Expected: {expected_value})")
+                settings_to_update.append((setting, expected_value))
+        else:
+            # Notify the user that the setting was not found and skip updating it
+            print(f"{setting}: Not found in settings (Cannot update this setting)")
+
+    # Apply updates if necessary
+    if settings_to_update:
+        print(f"Updating settings for device: {device}")
+        update_command = command_prefix + ["-d", device, "-y", "set"]
+        for setting, value in settings_to_update:
+            update_command.append(f"{setting}={value}")  # Only the value is passed
+
+        print(f"Update command: {' '.join(update_command)}")
+        result = run_command(update_command)
+        if result:
+            print(f"Settings updated successfully for device: {device}")
+            return True
+        else:
+            print(f"Failed to update settings for device: {device}")
+            return False
+    else:
+        print(f"No settings need to be changed for device: {device}")
+    return True
+
+
+def check_and_configure_mellanox_devices(binary_path, is_truenas):
+    """
+    Checks Mellanox devices and their settings and applies necessary configuration adjustments.
     """
     system_requires_reboot = False  # Track if a reboot is needed
-
-    # Get Mellanox devices
-    if is_truenas:
-        devices = get_mellanox_devices_truenas()
-    else:
-        mst_status_output = run_command([os.path.join(binary_path, "mst"), "status"])
-        if mst_status_output is None:
-            print("Failed to retrieve Mellanox device status.")
-            return system_requires_reboot
-        print("mst status output:\n", mst_status_output)
-
-        # Parse devices from the `mst status` output
-        devices = []
-        for line in mst_status_output.splitlines():
-            if "/dev/mst/" in line:
-                devices.append(line.split()[0])
+    devices = get_mellanox_devices(binary_path, is_truenas)
 
     if not devices:
-        print("No Mellanox devices found.")
+        print("No Mellanox devices found!")
+        print("Ensure Mellanox drivers are installed and the hardware is connected.")
         return system_requires_reboot
 
     print(f"Found Mellanox devices: {devices}")
 
     # Define required settings and their expected values
     required_settings = {
-        "SAFE_MODE": "False(0)",
+        "SAFE_MODE_ENABLE": "0",
         "NUM_OF_VFS": "16",
-        "VF_VPD_ENABLE": "True(1)",
-        "SRIOV_EN": "True(1)",
+        "VF_VPD_ENABLE": "1",
+        "SRIOV_EN": "1",
         "NUM_PF_MSIX": "64",
         "NUM_VF_MSIX": "8",
-        "LINK_TYPE_P1": "ETH(2)",
-        "LINK_TYPE_P2": "ETH(2)",
-        "EXP_ROM_UEFI_x86_ENABLE": "True(1)",
-        "UEFI_HII_EN": "True(1)"
+        "LINK_TYPE_P1": "2",
+        "LINK_TYPE_P2": "2",
+        "EXP_ROM_UEFI_x86_ENABLE": "1",
+        "UEFI_HII_EN": "1",
+        "EXP_ROM_PXE_ENABLE": "1"  # Example setting
     }
 
-    command_prefix = [binary_path + "/mlxconfig"] if not is_truenas else [binary_path + "/mstconfig"]
+    command_prefix = [os.path.join(binary_path, "mstconfig")] if is_truenas else [os.path.join(binary_path, "mlxconfig")]
 
-    # Check settings for each device and set them if needed
+    # Process each device
     for device in devices:
-        print(f"\nChecking settings for device: {device}")
-        query_command = command_prefix + (["-d", device, "q"] if not is_truenas else ["-d", device])
-        mlxconfig_output = run_command(query_command)
-        if mlxconfig_output is None:
-            print(f"Failed to retrieve settings for device {device}.")
-            continue
-
-        print(f"mlxconfig output for {device}:\n", mlxconfig_output)
-
-        # Track if settings need updates
-        settings_to_update = []
-
-        # Check each required parameter
-        for key, expected_value in required_settings.items():
-            match = re.search(fr"{key}\s+([^\s]+)", mlxconfig_output)
-            if match:
-                current_value = match.group(1)
-                if current_value == expected_value:
-                    print(f"{key}: {current_value} (OK)")
-                else:
-                    print(f"{key}: {current_value} (Expected: {expected_value})")
-                    settings_to_update.append((key, expected_value))
-            else:
-                print(f"{key}: Not found in mlxconfig output (Expected: {expected_value})")
-                settings_to_update.append((key, expected_value))
-
-        # Update settings if required
-        if settings_to_update:
-            print(f"Updating settings for device {device}...")
-            for key, value in settings_to_update:
-                # Remove the "(value)" part from the expected value for use in the set command
-                set_value = value.split("(")[1][:-1]
-                set_command = command_prefix + (["-d", device, "set", f"{key}={set_value}"] if not is_truenas else [f"-d {device}", f"{key}={set_value}"])
-                set_output = run_command(set_command)
-                if set_output is not None:
-                    print(f"Set {key} to {value}: {set_output}")
-
-            # Apply the new configuration on ESXi; this step isn't needed on TrueNAS
-            if not is_truenas:
-                apply_command = command_prefix + ["-d", device, "apply", "-y"]
-                apply_output = run_command(apply_command)
-                if apply_output is not None:
-                    print(f"Applied new settings for device {device}: {apply_output}")
-
-            # Mark a reboot as required due to settings changes
-            system_requires_reboot = True
-        else:
-            print(f"All settings for device {device} are already correct.")
+        current_settings = retrieve_device_settings(device, binary_path, is_truenas)
+        if current_settings:
+            updated = update_device_settings(device, required_settings, current_settings, command_prefix)
+            if updated:
+                system_requires_reboot = True
 
     return system_requires_reboot
 
+
 def main():
-    # Ask the user for the system type
-    system = input("Which system are you on? (Enter 'ESXi' or 'TrueNAS'): ").strip().lower()
+    """
+    Entry point for configuring Mellanox devices.
+    """
+    print("Mellanox Driver Configuration Tool")
 
-    if system == "esxi":
-        binary_path = "/opt/mellanox/bin"
-        reboot_required = check_and_set_mellanox_device(binary_path, is_truenas=False)
-    elif system == "truenas":
-        binary_path = "/usr/bin"
-        reboot_required = check_and_set_mellanox_device(binary_path, is_truenas=True)
-    else:
-        print("Invalid input. Please enter 'ESXi' or 'TrueNAS'.")
-        return
+    # Determine the system type
+    is_truenas = input("Are you configuring a TrueNAS system? (yes/no): ").strip().lower() in ["yes", "y"]
 
-    # Prompt for reboot if changes were applied
-    if reboot_required:
-        print("\nSystem changes require a reboot to take effect. Please reboot the system now.")
+    # Set default binary path based on the system type
+    if is_truenas:
+        binary_path = input("Enter the binary path for Mellanox tools (or press Enter for default '/usr/bin'): ").strip() or "/usr/bin"
     else:
-        print("\nNo changes were made, no reboot is necessary.")
+        binary_path = input("Enter the binary path for Mellanox tools (or press Enter for default '/opt/mellanox/bin'): ").strip() or "/opt/mellanox/bin"
+
+    # Perform configuration
+    try:
+        system_requires_reboot = check_and_configure_mellanox_devices(binary_path, is_truenas)
+
+        print("\nConfiguration completed successfully.")
+    except Exception as e:
+        print(f"An unexpected error occurred during configuration: {e}")
+
 
 if __name__ == "__main__":
     main()
