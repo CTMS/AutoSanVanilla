@@ -246,15 +246,33 @@ def upload_all_scripts(connection_type, ssh_client):
         upload_required_files_to_remote(ssh_client, get_script_path(), "/tmp/ez_scripts")
 
 
-def reboot_host(connection_type, ssh_client):
+def reboot_host(connection_type, ssh_client, host=None):
     """
-    Reboot the remote host.
+    Reboot the remote or local host and optionally wait for it to come back online.
     """
     print("\nRebooting the host...")
     if connection_type == "local":
         os.system("sudo reboot")
     else:
         execute_remote_command(ssh_client, "reboot", allow_input=True)
+        ssh_client.close()  # Close SSH connection as the host will reboot
+
+    # Check if host is provided for remote connection
+    if connection_type == "remote" and host:
+        while True:
+            user_choice = input("Would you like to wait until the host comes back online? (yes/no): ").strip().lower()
+            if user_choice in ["yes", "y"]:
+                print("Checking if the host is back online...")
+                while not is_host_online(host):
+                    print("Host is still offline, checking again in 10 seconds...")
+                    time.sleep(10)  # Wait for 10 seconds before retrying
+                print(f"The host {host} is now online!")
+                break  # Exit the loop once the host is back online
+            elif user_choice in ["no", "n"]:
+                print("Not waiting for the host to come back online. Exiting.")
+                break
+            else:
+                print("Invalid choice. Please enter 'yes' or 'no'.")
 
 
 def show_menu():
@@ -299,7 +317,7 @@ if __name__ == "__main__":
         elif choice == "5":
             reboot_host(connection_type, ssh_client)
         elif choice == "6":
-            print("Exiting tool. Goodbye!")
+            print("See ya later!")
             if ssh_client:
                 ssh_client.close()
             sys.exit(0)
