@@ -112,29 +112,30 @@ def get_mellanox_devices_truenas():
 
 def format_pci_address(pci_address):
     """
-    Validates and formats a PCI address into the proper format (DDDD:BB:DD.F).
+    Validates and formats a PCI or non-PCI address.
+    Supports PCI address format (DDDD:BB:DD.F) or any non-PCI identifier as-is.
     Arguments:
-        pci_address (str): The raw PCI address string.
+        pci_address (str): The raw identifier (PCI or non-PCI).
     Returns:
-        str: The formatted PCI address, or None if the address is invalid.
+        str: The formatted PCI address or original identifier.
     """
     # Match PCI addresses in formats like DDDD:BB:DD.F or BB:DD.F
-    # Optional domain part: (DDDD:)?
-    pattern = r"^(?:(\d{4}):)?([0-9a-fA-F]{2}):([0-9a-fA-F]{2})\.([0-7])$"
-    match = re.match(pattern, pci_address)
-    if not match:
-        print(f"Invalid PCI address format: {pci_address}")
-        return None
+    pci_pattern = r"^(?:(\d{4}):)?([0-9a-fA-F]{2}):([0-9a-fA-F]{2})\.([0-7])$"
+    match = re.match(pci_pattern, pci_address)
 
-    # Extract components, fill in missing domain with "0000"
-    domain = match.group(1) or "0000"
-    bus = match.group(2).zfill(2)
-    device = match.group(3).zfill(2)
-    function = match.group(4)
+    if match:
+        # Extract components, fill in missing domain with "0000"
+        domain = match.group(1) or "0000"
+        bus = match.group(2).zfill(2)
+        device = match.group(3).zfill(2)
+        function = match.group(4)
+        # Format as DDDD:BB:DD.F
+        return f"{domain}:{bus}:{device}.{function}"
 
-    # Format as DDDD:BB:DD.F
-    formatted_pci_address = f"{domain}:{bus}:{device}.{function}"
-    return formatted_pci_address
+    # If not a PCI address, assume it's valid as a non-PCI identifier
+    print(f"Non-PCI address detected: {pci_address}")
+    return pci_address
+
 
 def parse_mst_devices(output):
     """

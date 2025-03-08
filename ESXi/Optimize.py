@@ -106,8 +106,8 @@ def optimize_esxi():
     # Set iSCSI settings
     print("\nSetting iSCSI buffers...")
     iscsi_commands = [
-        "esxcli system settings advanced set -o /ISCSI/SocketRcvBufLenKB -i 4096",
-        "esxcli system settings advanced set -o /ISCSI/SocketSndBufLenKB -i 4096"
+        "esxcli system settings advanced set -o /ISCSI/SocketRcvBufLenKB -i 2048",
+        "esxcli system settings advanced set -o /ISCSI/SocketSndBufLenKB -i 2048"
     ]
     execute_commands(iscsi_commands, execute_command)
     # Set TCP/IP heap and receive queue settings
@@ -115,7 +115,7 @@ def optimize_esxi():
     tcp_commands = [
         "esxcli system settings advanced set -o /Net/TcpipHeapMax -i 1024",
         "esxcli system settings advanced set -o /Net/TcpipHeapSize -i 128",
-        "esxcli system settings advanced set -o /Net/TcpipRxDispatchQueues -i 8"
+        "esxcli system settings advanced set -o /Net/TcpipRxDispatchQueues -i 4"
     ]
     execute_commands(tcp_commands, execute_command)
     print("\nESXi optimization completed successfully!")
