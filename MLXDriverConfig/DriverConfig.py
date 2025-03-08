@@ -10,7 +10,6 @@ def run_command(command, timeout=30):
     Provides safe error handling and timeouts.
     """
     try:
-        print(f"Executing command: {' '.join(command)}")
         result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=timeout)
         if result.returncode != 0:
             print(f"Command failed: {' '.join(command)}\nError: {result.stderr.strip()}")
@@ -21,6 +20,7 @@ def run_command(command, timeout=30):
     except Exception as e:
         print(f"Unexpected error while running command {' '.join(command)}: {e}")
     return None
+
 
 def ensure_mstflint_installed():
     """
@@ -62,6 +62,32 @@ def ensure_mstflint_installed():
         return False
 
 
+def find_boot_pool_root_from_df():
+    """
+    Find the boot-pool/ROOT/<version>/usr path dynamically by parsing 'df -h' output.
+
+    :return: The full path to boot-pool/ROOT/<version>/usr if found, else None.
+    """
+    try:
+        # Run `df -h` command and capture the output
+        result = subprocess.run(['df', '-h'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
+
+        # Parse the output line by line
+        for line in result.stdout.splitlines():
+            # Look for lines containing boot-pool/ROOT and /usr
+            if "boot-pool/ROOT" in line and "/usr" in line:
+                # Extract the mount path (usually the last column in df -h output)
+                parts = line.split()  # Split the line into components
+                mount_path = parts[0]  # The mount point is in the last column
+                return mount_path
+
+    except subprocess.CalledProcessError as e:
+        print(f"Error running 'df -h': {e}")
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+
+    return None
+
 
 def get_mellanox_devices_truenas():
     """
@@ -83,6 +109,32 @@ def get_mellanox_devices_truenas():
 
     return devices
 
+
+def format_pci_address(pci_address):
+    """
+    Validates and formats a PCI address into the proper format (DDDD:BB:DD.F).
+    Arguments:
+        pci_address (str): The raw PCI address string.
+    Returns:
+        str: The formatted PCI address, or None if the address is invalid.
+    """
+    # Match PCI addresses in formats like DDDD:BB:DD.F or BB:DD.F
+    # Optional domain part: (DDDD:)?
+    pattern = r"^(?:(\d{4}):)?([0-9a-fA-F]{2}):([0-9a-fA-F]{2})\.([0-7])$"
+    match = re.match(pattern, pci_address)
+    if not match:
+        print(f"Invalid PCI address format: {pci_address}")
+        return None
+
+    # Extract components, fill in missing domain with "0000"
+    domain = match.group(1) or "0000"
+    bus = match.group(2).zfill(2)
+    device = match.group(3).zfill(2)
+    function = match.group(4)
+
+    # Format as DDDD:BB:DD.F
+    formatted_pci_address = f"{domain}:{bus}:{device}.{function}"
+    return formatted_pci_address
 
 def parse_mst_devices(output):
     """
@@ -121,7 +173,7 @@ def retrieve_device_settings(device, binary_path, is_truenas):
     Retrieves the current settings for a Mellanox device.
     """
     command_prefix = [os.path.join(binary_path, "mstconfig")] if is_truenas else [os.path.join(binary_path, "mlxconfig")]
-    query_command = command_prefix + (["-d", device, "q"] if not is_truenas else ["-d", device])
+    query_command = command_prefix + (["-d", device, "q"])
     return run_command(query_command)
 
 
@@ -181,6 +233,7 @@ def update_device_settings(device, required_settings, current_settings, command_
 def check_and_configure_mellanox_devices(binary_path, is_truenas):
     """
     Checks Mellanox devices and their settings and applies necessary configuration adjustments.
+    Ensures PCI addresses are properly formatted.
     """
     system_requires_reboot = False  # Track if a reboot is needed
     devices = get_mellanox_devices(binary_path, is_truenas)
@@ -190,7 +243,40 @@ def check_and_configure_mellanox_devices(binary_path, is_truenas):
         print("Ensure Mellanox drivers are installed and the hardware is connected.")
         return system_requires_reboot
 
-    print(f"Found Mellanox devices: {devices}")
+    formatted_devices = []
+    for device in devices:
+        # Validate and correct PCI address format
+        formatted_device = format_pci_address(device)
+        if formatted_device:
+            formatted_devices.append(formatted_device)
+        else:
+            print(f"Skipping invalid device: {device}")
+
+    if not formatted_devices:
+        print("No valid Mellanox devices found!")
+        return system_requires_reboot
+
+    print(f"Found Mellanox devices: {formatted_devices}")
+
+    # Let the user select which device(s) to update
+    if len(formatted_devices) > 1:
+        print("Multiple devices found. Please select the device(s) to configure:")
+        for i, device in enumerate(formatted_devices, start=1):
+            print(f"{i}. {device}")
+        print("Enter the numbers corresponding to the devices (comma-separated, e.g., '1,2'): ")
+
+        selected_devices = input().strip()
+        try:
+            indices = [int(i) - 1 for i in selected_devices.split(",") if i.strip().isdigit()]
+            if not indices or any(idx < 0 or idx >= len(formatted_devices) for idx in indices):
+                raise ValueError("Invalid selection")
+            devices_to_process = [formatted_devices[idx] for idx in indices]
+        except ValueError:
+            print("Invalid input. Exiting configuration.")
+            return system_requires_reboot
+    else:
+        devices_to_process = formatted_devices
+        print(f"Only one device found: {devices_to_process[0]}")
 
     # Define required settings and their expected values
     required_settings = {
@@ -214,8 +300,8 @@ def check_and_configure_mellanox_devices(binary_path, is_truenas):
 
     command_prefix = [os.path.join(binary_path, "mstconfig")] if is_truenas else [os.path.join(binary_path, "mlxconfig")]
 
-    # Process each device
-    for device in devices:
+    # Process each selected device
+    for device in devices_to_process:
         current_settings = retrieve_device_settings(device, binary_path, is_truenas)
         if current_settings:
             updated = update_device_settings(device, required_settings, current_settings, command_prefix)

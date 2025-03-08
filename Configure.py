@@ -53,6 +53,26 @@ def is_host_online(host):
         return False
 
 
+
+def wait_for_host_online(host, timeout=300):
+    """
+    Wait for the host to come back online after a reboot or downtime.
+
+    Args:
+        host (str): The IP or hostname of the remote host.
+        timeout (int): The maximum time, in seconds, to wait for the host to come online.
+
+    Returns:
+        bool: True if the host is online within the timeout, False otherwise.
+    """
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        if is_host_online(host):  # Uses the already defined function to ping the host
+            return True
+        time.sleep(5)  # Wait for 5 seconds before retrying
+    return False  # If timeout is reached, return False
+
+
 def connect_to_remote_host(host):
     """
     Connect to a remote host using SSH.
@@ -63,7 +83,7 @@ def connect_to_remote_host(host):
         sys.exit(1)
 
     username = input(f"Enter the username for {host}: ").strip()
-    password = input(f"Enter the password for {host}: ").strip()
+    password = input(f"Enter the password for {host} (Leave Empty for Key Auth): ").strip()
 
     try:
         ssh_client = paramiko.SSHClient()
@@ -109,6 +129,8 @@ def upload_required_files_to_remote(ssh_client, local_dir, remote_dir):
 def configure_driver(connection_type, ssh_client=None):
     """
     Configure drivers using DriverConfig.py.
+    After configuration, ask if the user wants to reboot the host.
+    If the host is rebooted, wait for it to come back online and re-establish the SSH connection.
     """
     try:
         python_interpreter = get_python_interpreter(connection_type, ssh_client)
@@ -119,6 +141,27 @@ def configure_driver(connection_type, ssh_client=None):
             remote_script = "/tmp/ez_scripts/DriverConfig.py"
             command = f"{python_interpreter} {remote_script}"
             execute_remote_command(ssh_client, command)
+
+        # Ask user if they want to reboot the host
+        if input("\nDriver configuration complete. Do you want to reboot the host? (yes/no): ").strip().lower() == "yes":
+            if connection_type == "local":
+                print("Rebooting the local machine...")
+                os.system("reboot")
+            else:
+                host = ssh_client.get_transport().getpeername()[0]  # Save the host before closing the SSH client
+                print("Rebooting the remote host...")
+                execute_remote_command(ssh_client, "reboot", allow_input=True)
+                ssh_client.close()  # Close SSH client immediately after issuing reboot command
+                print("Waiting for the host to come back online...")
+
+                # Wait until the host is back online
+                if wait_for_host_online(host, timeout=300):  # Wait up to 5 minutes
+                    print("The host is back online. Reconnecting to the host...")
+                    ssh_client = connect_to_remote_host(host)  # Reconnect to the host
+                else:
+                    print(f"Failed to reconnect to host {host} after the reboot.")
+                    sys.exit(1)  # Exit with an error if the host does not come back online
+
     except Exception as e:
         print(f"Error while configuring drivers: {e}")
 
@@ -140,19 +183,56 @@ def execute_truenas_script(connection_type, ssh_client, script_name):
         print(f"Error executing TrueNAS script {script_name}: {e}")
 
 
-def execute_remote_command(ssh_client, command):
+def handle_interactive_session(stdin, stdout):
     """
-    Execute a command on the remote host.
+    Handles input/output for interactive sessions.
+    Provides input from the user for remote scripts requiring interaction.
+    Returns the output of the interactive session.
     """
+    output = ""  # Initialize output to capture all the remote responses
     try:
-        stdin, stdout, stderr = ssh_client.exec_command(command)
-        print(stdout.read().decode())
-        error = stderr.read().decode()
-        if error:
-            print(f"Error: {error}")
+        while not stdout.channel.exit_status_ready():
+            if stdout.channel.recv_ready():
+                # Read and capture stdout from the remote command
+                data = stdout.channel.recv(1024).decode()
+                output += data
+                print(data, end="")
+
+                # If the remote script prompts for input, collect and send user input
+                if data.strip().endswith((":", "?", ">")):
+
+                    user_input = input("Input required (for remote): ").strip()
+                    stdin.write(user_input + "\n")
+                    stdin.flush()
+        return output
+    except KeyboardInterrupt:
+        print("\nInteractive session interrupted by user.")
+        raise
+    except Exception as e:
+        print(f"Error during interactive session: {e}")
+        return output  # Return the output collected so far
+
+
+def execute_remote_command(ssh_client, command, allow_input=True):
+    """
+    Execute a command on a remote host via SSH.
+    If allow_input=True, handle interactive input/output between the remote shell and the user.
+    """
+    stdin, stdout, stderr = ssh_client.exec_command(command, get_pty=allow_input)
+
+    output = ""  # Initialize output to avoid undefined variable error
+    try:
+        if allow_input:
+            output = handle_interactive_session(stdin, stdout)
+        else:
+            output = stdout.read().decode()
+            error = stderr.read().decode()
+            if error:
+                print(f"Error during execution: {error}")
+        return output.strip()
     except Exception as e:
         print(f"Error executing remote command: {e}")
-
+        raise
 
 def show_menu():
     """
@@ -186,7 +266,7 @@ def esxi_menu(connection_type, ssh_client):
             print("Invalid option. Please try again.")
 
 
-def truenas_menu(connection_type, ssh_client):
+def truenas_menu(connection_type, ssh_client=None):
     """
     Show the TrueNAS menu.
     """
@@ -209,6 +289,8 @@ def truenas_menu(connection_type, ssh_client):
 def optimize_system(connection_type, ssh_client=None):
     """
     Optimize the system by running Optimize.py.
+    After optimization, ask if the user wants to reboot the host.
+    If the host is rebooted, wait for it to come back online and continue.
     """
     try:
         python_interpreter = get_python_interpreter(connection_type, ssh_client)
@@ -219,13 +301,34 @@ def optimize_system(connection_type, ssh_client=None):
             remote_script = "/tmp/ez_scripts/Optimize.py"
             command = f"{python_interpreter} {remote_script}"
             execute_remote_command(ssh_client, command)
+
+        # Ask user if they want to reboot the host
+        if input("\nOptimization complete. Do you want to reboot the host? (yes/no): ").strip().lower() == "yes":
+            if connection_type == "local":
+                print("Rebooting the local machine...")
+                os.system("reboot")
+            else:
+                host = ssh_client.get_transport().getpeername()[0]  # Save the host before closing the SSH client
+                print("Rebooting the remote host...")
+                execute_remote_command(ssh_client, "reboot", allow_input=True)
+                ssh_client.close()  # Close SSH client immediately after issuing reboot command
+                print("Waiting for the host to come back online...")
+
+                # Wait until the host is back online
+                if wait_for_host_online(host, timeout=300):  # Wait up to 5 minutes
+                    print("The host is back online. Reconnecting to the host...")
+                    ssh_client = connect_to_remote_host(host)  # Reconnect to the host
+                else:
+                    print(f"Failed to reconnect to host {host} after the reboot.")
+                    sys.exit(1)  # Exit with an error if the host does not come back online
     except Exception as e:
-        print(f"Error optimizing system: {e}")
+        print(f"Error optimizing the system: {e}")
 
 
 def configure_rdma_iser(connection_type, ssh_client=None):
     """
     Configure RDMA/iSER by running RDMA.py.
+
     """
     try:
         python_interpreter = get_python_interpreter(connection_type, ssh_client)

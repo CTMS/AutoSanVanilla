@@ -40,7 +40,7 @@ def ensure_package_installed(package_name):
         print(f"Package '{package_name}' is already installed. Skipping installation.")
     else:
         print(f"Package '{package_name}' is not installed. Installing it now...")
-        run_command(f"apt install -y {package_name}")
+        run_command(f"apt install -y -f {package_name}")
 
 
 def load_kernel_module(module):
@@ -92,7 +92,7 @@ def find_boot_pool_root_from_df():
             if "boot-pool/ROOT" in line and "/usr" in line:
                 # Extract the mount path (usually the last column in df -h output)
                 parts = line.split()  # Split the line into components
-                mount_path = parts[-1]  # The mount point is in the last column
+                mount_path = parts[0]  # The mount point is in the last column
                 return mount_path
 
     except subprocess.CalledProcessError as e:
@@ -106,24 +106,24 @@ def find_boot_pool_root_from_df():
 def ensure_required_packages_installed():
     """
     Ensure a list of required packages is installed.
+    If a package fails, the script will continue to the next one.
     """
     required_packages = [
         "byobu",            # Terminal management tool
         "rdma-core",        # RDMA user libraries and drivers
         "libmlx5-1",        # Mellanox ConnectX-4/5 InfiniBand/Ethernet libraries
-        "libmlx5-dev",      # Mellanox development library
         "infiniband-diags", # Diagnostic tools for InfiniBand
-        "isert",            # iSER target framework
-        "scst",             # SCST SCSI target driver
-        "scst-dkms",        # SCST DKMS driver
-        "scstadmin",        # SCST administration tool
         "ibutils",          # InfiniBand utilities
-        "ibverbs-providers", # RDMA Verbs providers for user-level verbs
+        "ibverbs-providers",# RDMA Verbs providers for user-level verbs
         "ibverbs-utils",    # RDMA Verbs utilities for troubleshooting
         "mstflint"          # Mellanox firmware burning and query utility
     ]
+
     for package in required_packages:
-        ensure_package_installed(package)
+        try:
+            ensure_package_installed(package)
+        except Exception as e:
+            print(f"Failed to process package '{package}'. Error: {e}")
 
 
 def reload_all_required_kernel_modules():
