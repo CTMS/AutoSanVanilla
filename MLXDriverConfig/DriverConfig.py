@@ -22,6 +22,46 @@ def run_command(command, timeout=30):
         print(f"Unexpected error while running command {' '.join(command)}: {e}")
     return None
 
+def ensure_mstflint_installed():
+    """
+    Check if mstflint is installed; if not, install it.
+    """
+    print("Checking if mstflint package is installed...")
+
+    # Check if the 'mstflint' binary is available
+    if run_command(["which", "mstflint"]):
+        print("mstflint is already installed.")
+        return True
+
+    print("mstflint is not installed. Attempting to install...")
+    boot_pool_path = find_boot_pool_root_from_df()
+    if not boot_pool_path:
+        print("Error: Could not find the boot-pool/ROOT/<version>/usr path.")
+        sys.exit(1)
+
+    print(f"Found boot-pool path: {boot_pool_path}")
+    print(f"Remounting {boot_pool_path} as read-write...")
+    run_command(f"mount -o remount,rw {boot_pool_path}")
+
+    print("Modifying PATH to temporarily enable apt and dpkg...")
+    os.environ['PATH'] = "/usr/bin:/usr/sbin"
+
+    print("Making apt and dpkg executable...")
+    run_command("chmod +x /bin/apt*")
+    run_command("chmod +x /usr/bin/dpkg")
+
+    run_command(["apt", "update"])
+    # Install mstflint (this assumes a pkg-based system like FreeBSD/TrueNAS)
+    install_command = ["apt", "install", "-y", "mstflint"]
+    result = run_command(install_command)
+    if result:
+        print("mstflint successfully installed.")
+        return True
+    else:
+        print("Failed to install mstflint. Please ensure you have proper permissions and an active network connection.")
+        return False
+
+
 
 def get_mellanox_devices_truenas():
     """
@@ -166,6 +206,11 @@ def check_and_configure_mellanox_devices(binary_path, is_truenas):
         "UEFI_HII_EN": "1",
         "EXP_ROM_PXE_ENABLE": "1"  # Example setting
     }
+
+    if is_truenas:
+        if not ensure_mstflint_installed():
+            print("Failed to configure Mellanox devices because mstflint is missing.")
+            exit(1)
 
     command_prefix = [os.path.join(binary_path, "mstconfig")] if is_truenas else [os.path.join(binary_path, "mlxconfig")]
 

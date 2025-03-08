@@ -43,93 +43,199 @@ def ensure_package_installed(package_name):
         run_command(f"apt install -y {package_name}")
 
 
-def ensure_kernel_module(module):
+def load_kernel_module(module):
     """
-    Ensure a specific kernel module is loaded. If not, attempt to load it with modprobe.
+    Load a specific kernel module using modprobe.
     """
     try:
-        print(f"Checking if kernel module '{module}' is loaded...")
-        result = subprocess.run(f"lsmod | grep -w {module}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        if result.returncode != 0:
-            print(f"Kernel module '{module}' is not loaded. Loading it now with modprobe...")
-            run_command(f"modprobe {module}")
-        else:
-            print(f"Kernel module '{module}' is already loaded.")
+        print(f"Loading kernel module '{module}'...")
+        run_command(f"modprobe {module}")
+        print(f"Kernel module '{module}' loaded successfully.")
     except Exception as e:
-        print(f"Failed to check or load kernel module '{module}': {e}")
+        print(f"Failed to load kernel module '{module}': {e}")
         sys.exit(1)
+
+
+def unload_kernel_module(module):
+    """
+    Unload a specific kernel module using modprobe -r.
+    """
+    try:
+        print(f"Unloading kernel module '{module}'...")
+        run_command(f"modprobe -r {module}")
+        print(f"Kernel module '{module}' unloaded successfully.")
+    except Exception as e:
+        print(f"Failed to unload kernel module '{module}': {e}")
+
+
+def reload_kernel_module(module):
+    """
+    Reload a specific kernel module by first unloading it and then loading it again.
+    """
+    unload_kernel_module(module)
+    load_kernel_module(module)
+
+
+def find_boot_pool_root_from_df():
+    """
+    Find the boot-pool/ROOT/<version>/usr path dynamically by parsing 'df -h' output.
+
+    :return: The full path to boot-pool/ROOT/<version>/usr if found, else None.
+    """
+    try:
+        # Run `df -h` command and capture the output
+        result = subprocess.run(['df', '-h'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
+
+        # Parse the output line by line
+        for line in result.stdout.splitlines():
+            # Look for lines containing boot-pool/ROOT and /usr
+            if "boot-pool/ROOT" in line and "/usr" in line:
+                # Extract the mount path (usually the last column in df -h output)
+                parts = line.split()  # Split the line into components
+                mount_path = parts[-1]  # The mount point is in the last column
+                return mount_path
+
+    except subprocess.CalledProcessError as e:
+        print(f"Error running 'df -h': {e}")
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+
+    return None
+
+
+def ensure_required_packages_installed():
+    """
+    Ensure a list of required packages is installed.
+    """
+    required_packages = [
+        "byobu",            # Terminal management tool
+        "rdma-core",        # RDMA user libraries and drivers
+        "libmlx5-1",        # Mellanox ConnectX-4/5 InfiniBand/Ethernet libraries
+        "libmlx5-dev",      # Mellanox development library
+        "infiniband-diags", # Diagnostic tools for InfiniBand
+        "isert",            # iSER target framework
+        "scst",             # SCST SCSI target driver
+        "scst-dkms",        # SCST DKMS driver
+        "scstadmin",        # SCST administration tool
+        "ibutils",          # InfiniBand utilities
+        "ibverbs-providers", # RDMA Verbs providers for user-level verbs
+        "ibverbs-utils",    # RDMA Verbs utilities for troubleshooting
+        "mstflint"          # Mellanox firmware burning and query utility
+    ]
+    for package in required_packages:
+        ensure_package_installed(package)
+
+
+def reload_all_required_kernel_modules():
+    """
+    Reload all required kernel modules.
+    """
+    required_modules = [
+        "isert_scst",       # SCSI target framework for iSER
+        "rdma_cm",          # RDMA Communication Manager
+        "ib_core",          # InfiniBand core support
+        "mlx5_ib",          # Driver for Mellanox InfiniBand adapter
+        "mlx5_core",        # Mellanox ConnectX-4/5 drivers
+        "ib_uverbs",        # User-level verbs for RDMA
+        "mlxfw",            # Mellanox firmware updates
+        "rdma_ucm",         # RDMA CM user-space module
+        "ib_umad",          # Management Datagram
+        "ib_iser",          # iSER functionality
+        "ib_ipoib",         # IP over InfiniBand
+        "ib_cm"             # InfiniBand Communication Manager
+    ]
+    for module in required_modules:
+        print(f"Reloading kernel module: {module}")
+        reload_kernel_module(module)
+
+
+def restart_scst_service():
+    """
+    Restart the SCST service (systemctl restart scst.service).
+    """
+    try:
+        print("Restarting SCST service...")
+        run_command("systemctl restart scst.service")
+        print("SCST service restarted successfully.")
+    except Exception as e:
+        print(f"Failed to restart SCST service: {e}")
+        sys.exit(1)
+
+
+def get_user_input():
+    """
+    Prompt the user to choose to proceed or go back to the main menu.
+    """
+    print("\nWhat this script will do:")
+    print("==========================")
+    print("1. Ensure the required packages are installed.")
+    print("2. Reload required kernel modules.")
+    print("3. Restart the SCST service (scst.service).")
+    print("==========================")
+    print("\nOptions:")
+    print("1. Proceed with these actions")
+    print("2. Back to the main menu\n")
+
+    while True:
+        try:
+            user_input = int(input("Enter your choice (1 or 2): ").strip())
+            if user_input in [1, 2]:
+                return user_input
+            else:
+                print("Invalid input. Please enter 1 or 2.")
+        except ValueError:
+            print("Invalid input. Please enter a numeric value (1 or 2).")
 
 
 def main():
     # Save the original PATH
     old_path = os.environ['PATH']
 
-    try:
-        # Step 1: Remount /boot-pool as read-write
-        print("Remounting /boot-pool as read-write...")
-        run_command("mount -o remount,rw /boot-pool")
+    # Get user input for proceeding or going back to the main menu
+    choice = get_user_input()
+    if choice == 2:
+        print("Returning to the main menu. No actions will be taken.")
+        sys.exit(0)
 
-        # Step 2: Modify PATH temporarily
+    try:
+        # Step 1: Dynamically find the boot-pool path
+        boot_pool_path = find_boot_pool_root_from_df()
+        if not boot_pool_path:
+            print("Error: Could not find the boot-pool/ROOT/<version>/usr path.")
+            sys.exit(1)
+
+        print(f"Found boot-pool path: {boot_pool_path}")
+
+        # Step 2: Remount the target boot-pool directory as read-write
+        print(f"Remounting {boot_pool_path} as read-write...")
+        run_command(f"mount -o remount,rw {boot_pool_path}")
+
+        # Step 3: Modify PATH temporarily
         print("Modifying PATH to temporarily enable apt and dpkg...")
         os.environ['PATH'] = "/usr/bin:/usr/sbin"
 
-        # Step 3: Make apt and dpkg executable
+        # Step 4: Make apt and dpkg executable
         print("Making apt and dpkg executable...")
         run_command("chmod +x /bin/apt*")
         run_command("chmod +x /usr/bin/dpkg")
 
-        # Step 4: Update APT
-        print("Running apt update...")
-        run_command("apt update")
-
         # Step 5: Ensure required packages are installed
         print("Ensuring required packages are installed...")
-        required_packages = [
-            "rdma-core",
-            "mlnx-tools",
-            "libmlx5-1",
-            "libmlx5-dev",
-            "infiniband-diags",
-            "isert",
-            "scst",
-            "scst-dkms",
-            "scstadmin",
-            "ibutils"
-        ]
-        for package in required_packages:
-            ensure_package_installed(package)
+        ensure_required_packages_installed()
 
-        # Step 6: Ensure required kernel modules are loaded
-        print("Ensuring all required kernel modules are loaded...")
-        required_modules = [
-            "isert_scst",
-            "rdma_cm",
-            "ib_core",
-            "mlx5_ib",   # Driver for Mellanox InfiniBand adapter
-            "mlx5_core",
-            "ib_uverbs",
-            "mlxfw",
-            "rdma_ucm",  # Additional module for RDMA
-            "ib_umad",   # Management Datagram
-            "ib_iser",   # iSER functionality
-            "ib_ipoib",  # IP over InfiniBand
-            "ib_cm"      # Communication Manager
-        ]
-        for module in required_modules:
-            ensure_kernel_module(module)
+        # Step 6: Reload all required kernel modules
+        print("Reloading all required kernel modules...")
+        reload_all_required_kernel_modules()
 
-    except Exception as e:
-        print(f"Error occurred: {e}")
+        # Step 7: Restart SCST service
+        print("Restarting SCST service...")
+        restart_scst_service()
+
+        print("All required packages are ensured, kernel modules reloaded, and SCST service restarted!")
 
     finally:
-        # Step 7: Restore the original PATH
-        print("Restoring the original PATH...")
+        # Restore the original PATH
         os.environ['PATH'] = old_path
-
-        # Step 8: Remount /boot-pool as read-only
-        print("Remounting /boot-pool as read-only for safety...")
-        run_command("mount -o remount,ro /boot-pool")
-        print("Script execution finished.")
 
 
 if __name__ == "__main__":
