@@ -87,11 +87,10 @@ pip install paramiko
 First, ensure you have a local copy of the `AutoSanVanilla` project.
 
 ```shell script
-git clone <repository-url>
+git clone CTMS/AutoSanVanilla.git
 cd AutoSanVanilla
 ```
 
-Replace `<repository-url>` with the actual Git repository URL for this project.
 
 ---
 
@@ -126,7 +125,27 @@ Available Operations:
 Select an option (1-6): 
 
 ```
-
+Example Running Choosing TrueNas:
+```bashsupport pro shell
+   Main Menu:
+   1. Enable RDMA/iSER for a device
+   2. Disable RDMA/iSER for a device
+   3. List RDMA Devices
+   4. Exit
+   Enter your choice (1-4): 1
+````
+```bashsupport pro shell
+   Available RDMA devices:
+   1. vmhba40
+   2. vmhba41
+   0. Cancel
+   Select a device (0-2): 1
+   Enabling RDMA/iSER locally for device: vmhba40...
+   Successfully enabled RDMA/iSER for device vmhba40.
+   Configuring iSCSI parameters for adapter: vmhba40
+   Set MaxRecvDataSegmentLength to 8192 for adapter vmhba40.
+   Set MaxXmitDataSegmentLength to 8192 for adapter vmhba40.
+```
 
 ---
 
@@ -146,9 +165,8 @@ pip install paramiko
 
 ---
 
-## Additional Information
-- This script is designed to be modular and expandable.
-- You can add custom remote execution commands and further configurations based on specific optimization needs. Look into extending methods like `handle_interactive_session()` for more complex operations.
+## Known Issues
+- Doesn't handle subprocesses from apt particularly well. (Keep hitting return or rerun option if stuck)
 
 ---
 

@@ -164,7 +164,6 @@ def get_mellanox_devices(binary_path, is_truenas):
             print("Failed to retrieve Mellanox device status.")
             return []
 
-        print("mst status output:")
         print(mst_status_output)
         return parse_mst_devices(mst_status_output)
 

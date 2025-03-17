@@ -17,7 +17,7 @@ def check_and_load_iser_module():
         # Check if the 'iser' module is present and loaded
         iser_loaded = False
         for line in result.stdout.strip().split("\n"):
-            if "iser" in line and "true" in line.lower():  # 'true' indicates the module is loaded
+            if "iser" in line and "true" in line.lower():
                 iser_loaded = True
                 break
 
@@ -59,7 +59,7 @@ def list_rdma_devices():
         if result.returncode != 0:
             error_message = result.stderr.strip()
             print(f"Failed to fetch RDMA devices. Error: {error_message}")
-            return None
+            return []
 
         devices = []
         lines = result.stdout.strip().split("\n")
@@ -70,62 +70,10 @@ def list_rdma_devices():
         return devices
     except subprocess.TimeoutExpired:
         print("The operation to list RDMA devices has timed out.")
-        return None
+        return []
     except Exception as e:
         print(f"An error occurred while listing RDMA devices: {e}")
-        return None
-
-
-def list_active_rdma_adapters():
-    """
-    Lists all active RDMA adapters currently configured on the system.
-    """
-    print("Listing all active RDMA adapters...")
-    command = ["esxcli", "rdma", "device", "list"]
-    try:
-        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=15)
-        if result.returncode != 0:
-            error_message = result.stderr.strip()
-            print(f"Failed to list active RDMA adapters. Error: {error_message}")
-            return False
-
-        lines = result.stdout.strip().split("\n")
-        if len(lines) > 2:  # Skip the first two lines if there is data
-            print("\nActive RDMA Adapters:")
-            for line in lines:
-                print(line)
-        else:
-            print("No active RDMA adapters found.")
-        return True
-    except subprocess.TimeoutExpired:
-        print("The operation to list active RDMA adapters has timed out.")
-        return False
-    except Exception as e:
-        print(f"An error occurred while listing active RDMA adapters: {e}")
-        return False
-
-
-def choose_rdma_device(devices):
-    """
-    Allows the user to select an RDMA device from the list or cancel the selection.
-    """
-    print("\nAvailable RDMA devices:")
-    for idx, device in enumerate(devices, start=1):
-        print(f"{idx}. {device}")
-    print("0. Cancel")  # Add a cancel option
-
-    while True:
-        try:
-            choice = int(input(f"Select a device (0-{len(devices)}): ").strip())
-            if choice == 0:
-                print("Operation cancelled by the user.")
-                return None  # Return None to indicate cancellation
-            if 1 <= choice <= len(devices):
-                return devices[choice - 1]
-            else:
-                print("Invalid choice. Please select a valid number from the list.")
-        except ValueError:
-            print("Invalid input. Please enter a number.")
+        return []
 
 
 def enable_rdma_iser_local(device):
@@ -177,6 +125,63 @@ def disable_rdma_iser_local(device):
         return False
 
 
+def set_iscsi_buffer_size(adapter_name, max_recv=8192, max_xmit=8192):
+    """
+    Configures iSCSI max receive and transmit buffer size for a specific adapter.
+    """
+    try:
+        # Set MaxRecvDataSegmentLength
+        recv_command = [
+            "esxcli", "iscsi", "host", "adapter", "param", "set",
+            "-A", adapter_name, "-k", "MaxRecvDataSegmentLength", "-v", str(max_recv)
+        ]
+        subprocess.run(recv_command, check=True, text=True)
+        print(f"Set MaxRecvDataSegmentLength to {max_recv} for adapter {adapter_name}.")
+
+        # Set MaxXmitDataSegmentLength
+        xmit_command = [
+            "esxcli", "iscsi", "host", "adapter", "param", "set",
+            "-A", adapter_name, "-k", "MaxXmitDataSegmentLength", "-v", str(max_xmit)
+        ]
+        subprocess.run(xmit_command, check=True, text=True)
+        print(f"Set MaxXmitDataSegmentLength to {max_xmit} for adapter {adapter_name}.")
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to set iSCSI buffer sizes for adapter {adapter_name}. Error: {e}")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+
+
+def execute_device_action(action, devices):
+    """
+    Handles enabling or disabling RDMA/iSER for a selected device.
+    """
+    print("\nAvailable RDMA devices:")
+    for idx, device in enumerate(devices, start=1):
+        print(f"{idx}. {device}")
+    print("0. Cancel")  # Add a cancel option
+
+    while True:
+        try:
+            choice = int(input(f"Select a device (0-{len(devices)}): ").strip())
+            if choice == 0:
+                print("Operation cancelled by the user.")
+                return  # Exit without action
+            elif 1 <= choice <= len(devices):
+                selected_device = devices[choice - 1]
+                print(f"Selected device: {selected_device}")
+                if action == "enable":
+                    if enable_rdma_iser_local(selected_device):
+                        print(f"Configuring iSCSI parameters for adapter: {selected_device}")
+                        set_iscsi_buffer_size(selected_device)
+                elif action == "disable":
+                    disable_rdma_iser_local(selected_device)
+                return
+            else:
+                print("Invalid choice. Please select a valid number from the list.")
+        except ValueError:
+            print("Invalid input. Please enter a number.")
+
+
 def main_menu():
     """
     Displays the main menu and handles user choices.
@@ -185,7 +190,7 @@ def main_menu():
         print("\nMain Menu:")
         print("1. Enable RDMA/iSER for a device")
         print("2. Disable RDMA/iSER for a device")
-        print("3. List Active RDMA Adapters")
+        print("3. List RDMA Devices")
         print("4. Exit to Main Menu")
         choice = input("Enter your choice (1-4): ").strip()
 
@@ -193,39 +198,20 @@ def main_menu():
             print("Exiting. Goodbye!")
             sys.exit(0)  # Exit the program
         elif choice == "3":
-            list_active_rdma_adapters()
+            devices = list_rdma_devices()
+            if devices:
+                print(f"Found RDMA devices: {', '.join(devices)}")
+            else:
+                print("No RDMA devices found.")
         elif choice in ["1", "2"]:
-            execute_device_action(choice)
+            devices = list_rdma_devices()
+            if devices:
+                action = "enable" if choice == "1" else "disable"
+                execute_device_action(action, devices)
+            else:
+                print("No RDMA devices available.")
         else:
             print("Invalid choice. Please select a valid option.")
-
-
-def execute_device_action(action):
-    """
-    Handles enabling or disabling RDMA/iSER based on the user's choice.
-    """
-    devices = list_rdma_devices()
-    if not devices:
-        print("No RDMA devices found.")
-        return
-
-    selected_device = choose_rdma_device(devices)
-    if selected_device is None:  # Cancel action
-        print("Returning to main menu...")
-        return
-
-    if action == "1":
-        success = enable_rdma_iser_local(selected_device)
-    elif action == "2":
-        success = disable_rdma_iser_local(selected_device)
-    else:
-        print("Invalid action.")
-        return
-
-    if success:
-        print("Operation completed successfully.")
-    else:
-        print("Operation failed.")
 
 
 if __name__ == "__main__":

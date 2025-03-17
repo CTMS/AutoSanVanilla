@@ -130,7 +130,6 @@ def configure_driver(connection_type, ssh_client=None):
     """
     Configure drivers using DriverConfig.py.
     After configuration, ask if the user wants to reboot the host.
-    If the host is rebooted, wait for it to come back online and re-establish the SSH connection.
     """
     try:
         python_interpreter = get_python_interpreter(connection_type, ssh_client)
@@ -146,21 +145,15 @@ def configure_driver(connection_type, ssh_client=None):
         if input("\nDriver configuration complete. Do you want to reboot the host? (yes/no): ").strip().lower() == "yes":
             if connection_type == "local":
                 print("Rebooting the local machine...")
+                print("Reboot in progress...")
                 os.system("reboot")
+                sys.exit(0)  # Exit after sending the reboot command
             else:
-                host = ssh_client.get_transport().getpeername()[0]  # Save the host before closing the SSH client
                 print("Rebooting the remote host...")
                 execute_remote_command(ssh_client, "reboot", allow_input=True)
+                print("Reboot in progress...")
                 ssh_client.close()  # Close SSH client immediately after issuing reboot command
-                print("Waiting for the host to come back online...")
-
-                # Wait until the host is back online
-                if wait_for_host_online(host, timeout=300):  # Wait up to 5 minutes
-                    print("The host is back online. Reconnecting to the host...")
-                    ssh_client = connect_to_remote_host(host)  # Reconnect to the host
-                else:
-                    print(f"Failed to reconnect to host {host} after the reboot.")
-                    sys.exit(1)  # Exit with an error if the host does not come back online
+                sys.exit(0)  # Exit the program since no further waiting is needed
 
     except Exception as e:
         print(f"Error while configuring drivers: {e}")
@@ -290,7 +283,6 @@ def optimize_system(connection_type, ssh_client=None):
     """
     Optimize the system by running Optimize.py.
     After optimization, ask if the user wants to reboot the host.
-    If the host is rebooted, wait for it to come back online and continue.
     """
     try:
         python_interpreter = get_python_interpreter(connection_type, ssh_client)
@@ -306,21 +298,15 @@ def optimize_system(connection_type, ssh_client=None):
         if input("\nOptimization complete. Do you want to reboot the host? (yes/no): ").strip().lower() == "yes":
             if connection_type == "local":
                 print("Rebooting the local machine...")
+                print("Reboot in progress...")
                 os.system("reboot")
+                sys.exit(0)  # Exit after sending the reboot command
             else:
-                host = ssh_client.get_transport().getpeername()[0]  # Save the host before closing the SSH client
                 print("Rebooting the remote host...")
                 execute_remote_command(ssh_client, "reboot", allow_input=True)
+                print("Reboot in progress...")
                 ssh_client.close()  # Close SSH client immediately after issuing reboot command
-                print("Waiting for the host to come back online...")
-
-                # Wait until the host is back online
-                if wait_for_host_online(host, timeout=300):  # Wait up to 5 minutes
-                    print("The host is back online. Reconnecting to the host...")
-                    ssh_client = connect_to_remote_host(host)  # Reconnect to the host
-                else:
-                    print(f"Failed to reconnect to host {host} after the reboot.")
-                    sys.exit(1)  # Exit with an error if the host does not come back online
+                sys.exit(0)
     except Exception as e:
         print(f"Error optimizing the system: {e}")
 
