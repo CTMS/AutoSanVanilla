@@ -159,6 +159,25 @@ def configure_driver(connection_type, ssh_client=None):
         print(f"Error while configuring drivers: {e}")
 
 
+def check_maintenance_mode(ssh_client):
+    """
+    Check if the host is in maintenance mode using esxcli.
+    """
+    try:
+        command = "esxcli system maintenanceMode get"
+        print("Checking if the host is in maintenance mode...")
+        result = execute_remote_command(ssh_client, command)
+
+        if result.lower() != "true":
+            print("The host is NOT in maintenance mode. Returning to the main menu.")
+            return False
+        print("The host is in maintenance mode. Proceeding...")
+        return True
+    except Exception as e:
+        print(f"Error while checking maintenance mode: {e}")
+        return False
+
+
 def execute_truenas_script(connection_type, ssh_client, script_name):
     """
     Execute a TrueNAS script by name.
@@ -350,7 +369,8 @@ if __name__ == "__main__":
         elif choice == "2":
             configure_driver(connection_type, ssh_client)
         elif choice == "3":
-            esxi_menu(connection_type, ssh_client)
+            if check_maintenance_mode(ssh_client):
+                esxi_menu(connection_type, ssh_client)
         elif choice == "4":
             truenas_menu(connection_type, ssh_client)
         elif choice == "5":
