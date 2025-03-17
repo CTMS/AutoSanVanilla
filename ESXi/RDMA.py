@@ -164,7 +164,7 @@ def set_iscsi_buffer_size(adapter_name, max_recv=8192, max_xmit=8192):
     try:
         # Set MaxRecvDataSegmentLength
         recv_command = [
-            "esxcli", "iscsi", "host", "adapter", "param", "set",
+            "esxcli", "iscsi", "adapter", "param", "set",
             "-A", adapter_name, "-k", "MaxRecvDataSegLen", "-v", str(max_recv)
         ]
         subprocess.run(recv_command, check=True, text=True)
@@ -172,7 +172,7 @@ def set_iscsi_buffer_size(adapter_name, max_recv=8192, max_xmit=8192):
 
         # Set MaxXmitDataSegmentLength
         xmit_command = [
-            "esxcli", "iscsi", "host", "adapter", "param", "set",
+            "esxcli", "iscsi", "adapter", "param", "set",
             "-A", adapter_name, "-k", "MaxXmitDataSegLen", "-v", str(max_xmit)
         ]
         subprocess.run(xmit_command, check=True, text=True)
@@ -260,7 +260,7 @@ def main_menu():
             if devices:
                 action = "enable" if choice == "1" else "disable"
                 execute_device_action(action, devices)
-                if choice == "1"
+                if choice == "1":
                     configure_all_iscsi_adapters()
             else:
                 print("No RDMA devices available.")
