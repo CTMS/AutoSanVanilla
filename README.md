@@ -100,6 +100,24 @@ cd AutoSanVanilla
 ### 2. Running the Script
 
 
+Options:
+use `Options.json` to configure discovery targets
+
+```json
+{
+  "ISCSI": {
+    "discovery": [
+      "10.80.80.40:3260",
+      "10.80.80.45:3260",
+      "10.80.80.50:3260",
+      "10.80.80.47:3260"
+    ]
+  }
+}
+
+```
+
+
 
 Example:
 ```shell script
@@ -148,6 +166,37 @@ Example Running Choosing TrueNas:
    Configuring iSCSI parameters for adapter: vmhba40
    Set MaxRecvDataSegmentLength to 8192 for adapter vmhba40.
    Set MaxXmitDataSegmentLength to 8192 for adapter vmhba40.
+```
+
+```bashsupport pro script
+--- ISCSI/ISER Configuration Menu ---
+1. Optimize ISCSI/ISER and MLX Settings
+2. Load Dynamic Discovery to ISCSI/ISER Adapters
+3. Exit to Main Menu
+
+Enter your choice (1-3): 2
+
+Starting dynamic discovery configuration for ISCSI/ISER adapters...
+
+Retrieving list of available adapters...
+
+Available Adapters:
+1. vmhba33
+2. vmhba34
+3. Cancel
+
+Select an adapter by entering the number (or select 'Cancel' to go back): 1
+
+Do you want to add discovery address '10.80.80.40:3260' to adapter 'vmhba33'? (yes/no): yes
+Adding discovery address '10.80.80.40:3260' to adapter 'vmhba33'...
+Successfully added discovery address '10.80.80.40:3260' to adapter 'vmhba33'.
+
+Do you want to add discovery address '10.80.80.45:3260' to adapter 'vmhba33'? (yes/no): no
+Skipping discovery address '10.80.80.45:3260'.
+
+Do you want to add discovery address '10.80.80.50:3260' to adapter 'vmhba33'? (yes/no): yes
+Adding discovery address '10.80.80.50:3260' to adapter 'vmhba33'...
+Successfully added discovery address '10.80.80.50:3260' to adapter 'vmhba33'.
 ```
 
 ---
