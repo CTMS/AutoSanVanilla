@@ -369,7 +369,7 @@ if __name__ == "__main__":
         elif choice == "2":
             configure_driver(connection_type, ssh_client)
         elif choice == "3":
-            if check_maintenance_mode(ssh_client):
+            if check_maintenance_mode(ssh_client) == True:
                 esxi_menu(connection_type, ssh_client)
         elif choice == "4":
             truenas_menu(connection_type, ssh_client)
