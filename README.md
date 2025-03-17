@@ -1,5 +1,5 @@
 # AutoSanVanilla
-A Skeen Python script that will optimize Mellenax Cards, vsphere, enable rdma, iser, and more
+A Skeen Python script that will optimize Mellenox Cards, vsphere, enable rdma, iser, and more
 
 
 
@@ -79,6 +79,9 @@ pip install paramiko
 4. **Files Prepared**:
     - Files like `DriverConfig.py`, `Optimize.py`, and `RDMA.py` must be available in their respective directories for successful execution of file uploads.
 
+5. **Note**:
+    - After using TrueNas iser installation,  mellenox tools use `mstconfig` instead of the ESXi equivalent `mlxconfig` 
+    - On TrueNas running `DriverConfig.py`:  It's a good idea to run the optimizations on both PCI busses that it detects.
 ---
 
 ## How to Use
