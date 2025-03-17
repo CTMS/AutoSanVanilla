@@ -125,9 +125,41 @@ def disable_rdma_iser_local(device):
         return False
 
 
+def get_iscsi_adapters():
+    """
+    Retrieves the list of all iSCSI adapters on the system.
+
+    Returns:
+        list: A list of adapter names (e.g., ['vmhba32', 'vmhba33']).
+    """
+    try:
+        command = ["esxcli", "iscsi", "adapter", "list"]
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
+        adapters = []
+
+        # Extract adapter names from the output
+        lines = result.stdout.strip().split("\n")
+        for line in lines[2:]:  # Skip the header row
+            parts = line.split()
+            if len(parts) > 1 and parts[1] == "iser":
+                adapters.append(parts[0])  # Assuming adapter name is the first column
+
+        return adapters
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to retrieve iSCSI adapters. Error: {e}")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+
+    return []
+
 def set_iscsi_buffer_size(adapter_name, max_recv=8192, max_xmit=8192):
     """
     Configures iSCSI max receive and transmit buffer size for a specific adapter.
+
+    Args:
+        adapter_name (str): The name of the iSCSI adapter (e.g., 'vmhba32').
+        max_recv (int): Maximum receive buffer size (in bytes).
+        max_xmit (int): Maximum transmit buffer size (in bytes).
     """
     try:
         # Set MaxRecvDataSegmentLength
@@ -138,10 +170,37 @@ def set_iscsi_buffer_size(adapter_name, max_recv=8192, max_xmit=8192):
         subprocess.run(recv_command, check=True, text=True)
         print(f"Set MaxRecvDataSegLen to {max_recv} for adapter {adapter_name}.")
 
+        # Set MaxXmitDataSegmentLength
+        xmit_command = [
+            "esxcli", "iscsi", "host", "adapter", "param", "set",
+            "-A", adapter_name, "-k", "MaxXmitDataSegLen", "-v", str(max_xmit)
+        ]
+        subprocess.run(xmit_command, check=True, text=True)
+        print(f"Set MaxXmitDataSegLen to {max_xmit} for adapter {adapter_name}.")
+
     except subprocess.CalledProcessError as e:
         print(f"Failed to set iSCSI buffer sizes for adapter {adapter_name}. Error: {e}")
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
+
+def configure_all_iscsi_adapters(max_recv=8192, max_xmit=8192):
+    """
+    Configures iSCSI buffer sizes for all adapters fetched from the system.
+
+    Args:
+        max_recv (int): Maximum receive buffer size (in bytes).
+        max_xmit (int): Maximum transmit buffer size (in bytes).
+    """
+    adapters = get_iscsi_adapters()
+    if not adapters:
+        print("No iSCSI adapters found.")
+        return
+
+    print("Configuring iSCSI buffer sizes for all adapters...")
+    for adapter in adapters:
+        print(f"\nProcessing adapter: {adapter}")
+        set_iscsi_buffer_size(adapter, max_recv, max_xmit)
+
 
 
 def execute_device_action(action, devices):
@@ -201,6 +260,8 @@ def main_menu():
             if devices:
                 action = "enable" if choice == "1" else "disable"
                 execute_device_action(action, devices)
+                if choice == "1"
+                    configure_all_iscsi_adapters()
             else:
                 print("No RDMA devices available.")
         else:
