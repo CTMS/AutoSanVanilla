@@ -168,10 +168,9 @@ def check_maintenance_mode(ssh_client):
         print("Checking if the host is in maintenance mode...")
         result = execute_remote_command(ssh_client, command)
 
-        if result.lower() != "true":
+        if result.lower() != "enabled":
             print("The host is NOT in maintenance mode. Returning to the main menu.")
             return False
-        print("The host is in maintenance mode. Proceeding...")
         return True
     except Exception as e:
         print(f"Error while checking maintenance mode: {e}")
