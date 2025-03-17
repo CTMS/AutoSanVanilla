@@ -133,18 +133,11 @@ def set_iscsi_buffer_size(adapter_name, max_recv=8192, max_xmit=8192):
         # Set MaxRecvDataSegmentLength
         recv_command = [
             "esxcli", "iscsi", "host", "adapter", "param", "set",
-            "-A", adapter_name, "-k", "MaxRecvDataSegmentLength", "-v", str(max_recv)
+            "-A", adapter_name, "-k", "MaxRecvDataSegLen", "-v", str(max_recv)
         ]
         subprocess.run(recv_command, check=True, text=True)
-        print(f"Set MaxRecvDataSegmentLength to {max_recv} for adapter {adapter_name}.")
+        print(f"Set MaxRecvDataSegLen to {max_recv} for adapter {adapter_name}.")
 
-        # Set MaxXmitDataSegmentLength
-        xmit_command = [
-            "esxcli", "iscsi", "host", "adapter", "param", "set",
-            "-A", adapter_name, "-k", "MaxXmitDataSegmentLength", "-v", str(max_xmit)
-        ]
-        subprocess.run(xmit_command, check=True, text=True)
-        print(f"Set MaxXmitDataSegmentLength to {max_xmit} for adapter {adapter_name}.")
     except subprocess.CalledProcessError as e:
         print(f"Failed to set iSCSI buffer sizes for adapter {adapter_name}. Error: {e}")
     except Exception as e:
