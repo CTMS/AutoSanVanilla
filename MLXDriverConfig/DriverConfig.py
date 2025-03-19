@@ -290,7 +290,9 @@ def check_and_configure_mellanox_devices(binary_path, is_truenas):
         "LINK_TYPE_P2": "2",
         "EXP_ROM_UEFI_x86_ENABLE": "1",
         "UEFI_HII_EN": "1",
-        "EXP_ROM_PXE_ENABLE": "1"  # Example setting
+        "EXP_ROM_PXE_ENABLE": "1",
+        "NUM_OF_PFC_P1": "4",
+        "NUM_OF_PFC_P2": "4",
     }
 
     if is_truenas:

@@ -52,6 +52,8 @@ AutoSanVanilla/
 │   TrueNas/ (in active development)
 │   ├── CreateZvols.py
 │   ├── CreateISER.py
+|   VM
+    ├── ResizeDisk.py
 
 ```
 
@@ -198,6 +200,37 @@ Do you want to add discovery address '10.80.80.50:3260' to adapter 'vmhba33'? (y
 Adding discovery address '10.80.80.50:3260' to adapter 'vmhba33'...
 Successfully added discovery address '10.80.80.50:3260' to adapter 'vmhba33'.
 ```
+
+---
+- **VM Operations**:
+``` bash
+   python3 VM/ResizeDisk.py
+```
+1. lists all partitions:
+``` 
+   NAME     SIZE FSTYPE  MOUNTPOINT
+   sda       20G         
+   sda1      1G  ext4    /
+   sda2      19G         
+```
+2. You type the name of the partition you want to resize:
+``` 
+   Enter the partition name you want to resize (e.g., sda2): sda2
+```
+3. It asks whether the filesystem is **LVM** or **XFS**:
+``` 
+   Is the system using LVM or XFS? (type 'lvm' or 'xfs'): lvm
+```
+For `LVM`:
+   - It asks for the logical volume path (e.g., `/dev/mapper/ubuntu--vg-ubuntu--lv`).
+   - Uses `lvextend` and resizes the filesystem (`resize2fs` for ext4 or `xfs_growfs` for XFS).
+
+For `XFS`:
+   - It asks for the mount point (e.g., `/mnt`).
+   - Runs `xfs_growfs` and `xfs_info`.
+
+**Finally, it displays the updated disk state.**
+
 
 ---
 

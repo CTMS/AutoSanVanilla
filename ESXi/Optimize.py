@@ -93,6 +93,10 @@ def optimize_esxi():
     ))
     print("\nVerifying nmlx5_core module parameters...")
     execute_command("esxcli system module parameters list -m nmlx5_core")
+    print("\nIncreasing iSER Max Command Queue")
+    execute_command("esxcli system module parameters set -m iser -p 'iser_LunQDepth=512'")
+
+
     iscsi_commands = [
         "esxcli system settings advanced set -o /ISCSI/SocketRcvBufLenKB -i 2048",
         "esxcli system settings advanced set -o /ISCSI/SocketSndBufLenKB -i 2048"

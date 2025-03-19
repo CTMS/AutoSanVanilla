@@ -152,7 +152,7 @@ def get_iscsi_adapters():
 
     return []
 
-def set_iscsi_buffer_size(adapter_name, max_recv=8192, max_xmit=8192):
+def set_iscsi_buffer_size(adapter_name, max_recv=1048576, max_xmit=1048576):
     """
     Configures iSCSI max receive and transmit buffer size for a specific adapter.
 
@@ -165,10 +165,24 @@ def set_iscsi_buffer_size(adapter_name, max_recv=8192, max_xmit=8192):
         # Set MaxRecvDataSegmentLength
         recv_command = [
             "esxcli", "iscsi", "adapter", "param", "set",
-            "-A", adapter_name, "-k", "MaxRecvDataSegLen", "-v", str(max_recv)
+            "-A", adapter_name, "-k", "MaxRecvDataSegment", "-v", str(max_recv)
         ]
         subprocess.run(recv_command, check=True, text=True)
         print(f"Set MaxRecvDataSegLen to {max_recv} for adapter {adapter_name}.")
+
+        send_command = [
+            "esxcli", "iscsi", "adapter", "param", "set",
+            "-A", adapter_name, "-k", "MaxBurstLength", "-v", str(max_xmit)
+        ]
+        subprocess.run(send_command, check=True, text=True)
+
+        first_command = [
+            "esxcli", "iscsi", "adapter", "param", "set",
+            "-A", adapter_name, "-k", "FirstBurstLength", "-v", str(max_xmit)
+        ]
+        subprocess.run(first_command, check=True, text=True)
+        print(f"Set MaxBurstLength to {max_xmit} for adapter {adapter_name}.")
+        print(f"Set FirstBurstLength to {max_xmit} for adapter {adapter_name}.")
 
 
     except subprocess.CalledProcessError as e:
@@ -176,13 +190,12 @@ def set_iscsi_buffer_size(adapter_name, max_recv=8192, max_xmit=8192):
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
 
-def configure_all_iscsi_adapters(max_recv=8192, max_xmit=8192):
+def configure_all_iscsi_adapters(max_recv=1048576, max_xmit=1048576):
     """
     Configures iSCSI buffer sizes for all adapters fetched from the system.
 
     Args:
         max_recv (int): Maximum receive buffer size (in bytes).
-        max_xmit (int): Maximum transmit buffer size (in bytes).
     """
     adapters = get_iscsi_adapters()
     if not adapters:
