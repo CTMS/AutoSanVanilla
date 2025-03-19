@@ -99,9 +99,12 @@ def optimize_esxi():
 
     iscsi_commands = [
         "esxcli system settings advanced set -o /ISCSI/SocketRcvBufLenKB -i 2048",
-        "esxcli system settings advanced set -o /ISCSI/SocketSndBufLenKB -i 2048"
+        "esxcli system settings advanced set -o /ISCSI/SocketSndBufLenKB -i 2048",
+        "esxcli system settings advanced set -o /Disk/SchedQuantum -i 16",
+        "esxcli system settings advanced set -o /Disk/SchedQControlSeqReqs -i 512",
+        "esxcli system module parameters set -m iscsi_vmk -p 'iscsivmk_LunQDepth=512 iscsivmk_HostQDepth=512 iscsivmk_InitialR2T=1 iscsivmk_MaxChannels=4'"
     ]
-    print("\nSetting iSCSI buffers...")
+    print("\nSetting iSCSI buffers and Queues...")
     execute_commands(iscsi_commands, execute_command)
     tcp_commands = [
         "esxcli system settings advanced set -o /Net/TcpipHeapMax -i 1024",
