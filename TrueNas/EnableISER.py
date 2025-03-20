@@ -116,7 +116,7 @@ def ensure_required_packages_installed():
         "ibutils",          # InfiniBand utilities
         "ibverbs-providers",# RDMA Verbs providers for user-level verbs
         "ibverbs-utils",    # RDMA Verbs utilities for troubleshooting
-        "mstflint"          # Mellanox firmware burning and query utility
+        "mstflint",          # Mellanox firmware burning and query utility
     ]
 
     for package in required_packages:

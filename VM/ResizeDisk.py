@@ -89,7 +89,7 @@ def main():
 
     # Step 7: Display the final disk state
     print("\nFinal disk state:")
-    run_command("lsblk -o NAME,SIZE,LOG-SEC,PHY-SEC,OPT-IO,RA,TYPE,FSTYPE,MOUNTPOINTS,PATH,ID-LINK")
+    run_command("lsblk -o NAME,SIZE,LOG-SEC,PHY-SEC,OPT-IO,RA,TYPE,FSTYPE,MOUNTPOINTS,PATH,RQ-SIZE")
 
     print("\nProcess completed successfully.")
     sys.exit(0)

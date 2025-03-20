@@ -1,0 +1,70 @@
+#!/bin/bash
+
+# Refresh interval in seconds (use fractional for ms e.g., 0.5)
+interval=0.5
+
+# Command to run and monitor
+command_to_run="./scstadmin -list_sessions 2>/dev/null"
+
+# Start the infinite loop for refreshing
+while true; do
+    # Use a single buffer to store all output
+    buffer=""
+
+    # Add header like `watch` with a timestamp
+    buffer+="Every ${interval} seconds - $(date)\n"
+    buffer+="---------------------------------\n"
+
+    # Collect and parse the command's output
+    output=$(${command_to_run})
+
+    current_driver=""
+    current_session=""
+
+    # Print the header for the formatted table
+    print_table_header() {
+        buffer+=$(printf "%-30s %-20s %-10s\n" "Attribute" "Value" "Writable\n")
+        buffer+=$(printf "%-30s %-20s %-10s\n" "---------" "-----" "--------\n")
+    }
+
+    # Process each line of the command output
+    while read -r line; do
+        # Normalize whitespace in the line
+        line=$(echo "$line" | tr -s ' ')
+
+        # Check for a new driver/target line
+        if [[ $line == Driver/Target:* ]]; then
+            current_driver=${line#Driver/Target: }
+            buffer+="\n-- Driver/Target: $current_driver\n"
+
+        # Check for a session line
+        elif [[ $line == Session:* ]]; then
+            current_session=${line#Session: }
+            buffer+="\n$current_session:\n\n"
+            print_table_header # Add table headers
+
+        # Parse attributes for current session (skip headers, separators, etc.)
+        elif [[ -n $line ]]; then
+            # Extract attributes, values, and writable flags with flexible parsing
+            attribute=$(echo "$line" | awk '{print $1}')
+            value=$(echo "$line" | awk '{print $2}')
+            writable=$(echo "$line" | awk '{print $3}')
+
+            # Handle multi-row attributes like LUN and irregular fields
+            if [[ "$attribute" == "LUN" ]]; then
+                buffer+=$(printf "%-30s %-20s %-10s\n" "$attribute" "$value" "")
+                buffer+="$(echo "$line" | cut -d' ' -f3-)\n"
+            elif [[ -n "$attribute" && -n "$value" ]]; then
+                buffer+=$(printf "%-30s %-20s %-10s\n" \
+                    "$attribute" "$value" "${writable^^}\n") # Uppercase YES/NO
+            fi
+        fi
+    done < <(echo "$output") # Feed `output` using process substitution
+
+    # Print the entire buffered output at once
+    printf "\033[H\033[J" # Clear the screen and reset the cursor
+    echo -e "$buffer"
+
+    # Sleep for the specified interval
+    sleep "$interval"
+done

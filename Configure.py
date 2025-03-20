@@ -102,11 +102,13 @@ def upload_required_files_to_remote(ssh_client, local_dir, remote_dir):
     Upload necessary files to the remote host.
     """
     files = [
+        "Options.json",
         "MLXDriverConfig/DriverConfig.py",
         "ESXi/Optimize.py",
         "ESXi/RDMA.py",
         "TrueNas/EnableISER.py",
         "TrueNas/CreateZvols.py",
+        "VM/ResizeDisk.py",
     ]
     try:
         sftp = ssh_client.open_sftp()

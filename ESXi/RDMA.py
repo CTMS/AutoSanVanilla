@@ -152,7 +152,7 @@ def get_iscsi_adapters():
 
     return []
 
-def set_iscsi_buffer_size(adapter_name, max_recv=1048576, max_xmit=1048576):
+def set_iscsi_buffer_size(adapter_name, max_recv=8192, max_xmit=8192):
     """
     Configures iSCSI max receive and transmit buffer size for a specific adapter.
 
@@ -190,7 +190,7 @@ def set_iscsi_buffer_size(adapter_name, max_recv=1048576, max_xmit=1048576):
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
 
-def configure_all_iscsi_adapters(max_recv=1048576, max_xmit=1048576):
+def configure_all_iscsi_adapters(max_recv=8192, max_xmit=8192):
     """
     Configures iSCSI buffer sizes for all adapters fetched from the system.
 

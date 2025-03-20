@@ -101,8 +101,14 @@ def optimize_esxi():
         "esxcli system settings advanced set -o /ISCSI/SocketRcvBufLenKB -i 2048",
         "esxcli system settings advanced set -o /ISCSI/SocketSndBufLenKB -i 2048",
         "esxcli system settings advanced set -o /Disk/SchedQuantum -i 16",
-        "esxcli system settings advanced set -o /Disk/SchedQControlSeqReqs -i 512",
-        "esxcli system module parameters set -m iscsi_vmk -p 'iscsivmk_LunQDepth=512 iscsivmk_HostQDepth=512 iscsivmk_InitialR2T=1 iscsivmk_MaxChannels=4'"
+        "esxcli system settings advanced set -o /Disk/SchedQControlSeqReqs -i 256",
+        "esxcli system settings advanced set -o /ISCSI/MaxIoSizeKB -i 256",
+        "esxcli system settings advanced set -o /Net/NetSchedHClkMQ -i 1",
+        "esxcli system module parameters set -m iscsi_vmk -p 'iscsivmk_LunQDepth=128 iscsivmk_HostQDepth=1024 iscsivmk_InitialR2T=1 iscsivmk_MaxChannels=4'",
+        "esxcli system settings advanced set -o /Disk/SchedCostUnit -i 65536",
+        "esxcli system settings advanced set -o /Disk/SchedQCleanupInterval -i 120",
+        "esxcli system settings advanced set -o /Disk/QFullThreshold -i 16",
+        "esxcli system settings advanced set -o /Disk/ReqCallThreshold -i 2"
     ]
     print("\nSetting iSCSI buffers and Queues...")
     execute_commands(iscsi_commands, execute_command)
@@ -122,7 +128,7 @@ def load_discovery_options():
     :return: A list of discovery addresses, or an empty list if file loading fails.
     """
     try:
-        with open("Options.json", "r") as file:
+        with open("../Options.json", "r") as file:
             options = json.load(file)
             return options.get("ISCSI", {}).get("discovery", [])
     except FileNotFoundError:

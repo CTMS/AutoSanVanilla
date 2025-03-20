@@ -15,5 +15,8 @@
     "options": [
       {"opt": "-G", "value": "rx 8192 tx 8192"}
     ]
+  },
+  "vsphere": {
+    "options": {}
   }
 }
