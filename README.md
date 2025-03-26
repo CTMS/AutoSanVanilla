@@ -250,6 +250,136 @@ pip install paramiko
 
 ---
 
+- **Testing IB connections**:
+```script
+# This test, 128 queue's with an mtu at 4096 and a sending size of around 64k
+# Guid for this adaper was -g 1 (RoCev2).  do ibv_devinfo -v to use the correct GUID
+# Client side:
+ibv_rc_pingpong -g 1 -m 4096 -s 64000 -r 128 -n 1000000 <ip>
+
+# Server side:
+ibv_rc_pingpong -g 1 -m 4096 -s 64000 -r 128 -n 1000000
+```
+
+- **Restart targetcli-fb**:
+```
+systemctl restart rtslib-fb-targetctl.service
+```
+
+
+### **ISCSI Target Lun and Disk Settings**
+
+#### You'll want to try to match (or close to a multiple that works for your load) block sizes, physical sectors, logical sectors and queue_sizes for your disks, all the way to the VM host OS.  
+If these values are not matched or not close to multiples: block sizes, queues, etc..., `I/O penalties can occur.`  
+
+- **Determine Disks Size on the SAN**:
+```bash
+
+lsblk -o NAME,MODEL,PHY-SEC,LOG-SEC,MIN-IO,OPT-IO,RQ-SIZE
+
+NAME        MODEL                   PHY-SEC LOG-SEC MIN-IO   OPT-IO RQ-SIZE
+sda         H0H72121CLAR12T0           4096    4096   4096        0     256
+└─sda1                                 4096    4096   4096        0     256
+sdb         H0H72121CLAR12T0           4096    4096   4096        0     256
+└─sdb1                                 4096    4096   4096        0     256
+sdc         H0H72121CLAR12T0           4096    4096   4096        0     256
+└─sdc1                                 4096    4096   4096        0     256
+sdd         H0H72121CLAR12T0           4096    4096   4096        0     256
+└─sdd1                                 4096    4096   4096        0     256
+sde         H0H72121CLAR12T0           4096    4096   4096        0     256
+sdf         Samsung SSD 870 QVO 1TB     512     512    512        0      64
+├─sdf1                                  512     512    512        0      64
+├─sdf2                                  512     512    512        0      64
+└─sdf3                                  512     512    512        0      64
+sdg         H0H72121CLAR12T0           4096    4096   4096        0     256
+└─sdg1                                 4096    4096   4096        0     256
+sdh         H0H72121CLAR12T0           4096    4096   4096        0     256
+sdi         H0H72121CLAR12T0           4096    4096   4096        0     256
+└─sdi1                                 4096    4096   4096        0     256
+sdj         H0H72121CLAR12T0           4096    4096   4096        0     256
+
+```
+
+- **Next step**:
+```
+echo "options zfs zvol_blk_mq_queue_depth=254 zvol_blk_mq_blocks_per_thread=16 zvol_use_blk_mq=1" >> /etc/modprobe.d/zfs.conf
+
+# Update Kernel
+update-initramfs -u
+```
+
+| Backend Type | `max_unmap_block_desc_count` | `max_unmap_lba_count` |
+| --- | --- | --- |
+| Thin-Provisioned HDD | 64 | 2097152 (1 GiB @ 512-byte) |
+| SSD / NVMe | 256-1024 | 8388608 (4 GiB @ 512-byte) |
+| Enterprise SAN | 256-1024 | 8388608 (4 GiB @ 512-byte) |
+| High-Performance Use | 1024 or more | ~16 GiB (depends on system) |
+
+### **VMWare**
+
+| Attribute Name | Value (512-Byte Blocks) | Value (4096-Byte Blocks) | Notes |
+| --- | --- | --- | --- |
+| **`unmap_granularity`** | 2048 | 256 | Corresponds to 1 MiB granularity. |
+| **`unmap_granularity_alignment`** | 2048 | 256 | Matches `unmap_granularity` for proper alignment. |
+| **`unmap_zeroes_data`** | 0 | 0 | Prevents performance penalties by avoiding unnecessary zeroing operations. |
+
+
+Most zfs setups will use 32Mib for I/O Optimization for ```max_unmap_lba_count```:
+- For **32 MB**: `65,536 × 2 = 131,072 sectors`.
+- For **64 MB**: `65,536 × 2 = 131,072 sectors`.
+- For **128 MB**: `65,536 × 4 = 262,144 sectors`.
+- For **256 MB**: `65,536 × 8 = 524,288 sectors`.
+- For **512 MB**: `65,536 × 16 = 1,048,576 sectors`.
+
+
+### **Drive Type, Block Size and Environment**
+
+| **Environment** | **Block Size (Bytes)** | **Recommended `max_write_same_len`** | **Explanation** |
+| --- | --- | --- | --- |
+| **Thin-Provisioned HDD** | 512 | 131072 (64 MiB) | Moderate value optimized for thin provisioning without overwhelming traditional HDDs. |
+|  | 4096 | 16384 (64 MiB) |  |
+| **SSD / Enterprise SATA** | 512 | 262144 (128 MiB) | SSDs handle larger transfer sizes effectively; setting higher values can improve bulk data operations. |
+|  | 4096 | 32768 (128 MiB) |  |
+| **NVMe** | 512 | 1048576 (512 MiB) | NVMe storage has extremely high IOPS and throughput; large transfer sizes maximize its potential. |
+|  | 4096 | 131072 (512 MiB) |  |
+| **VMware Workloads** | 512 | 2097152 (1 GiB) | VMware ESXi benefits greatly from large `WRITE SAME` operations for space-efficient tasks like zeroing. |
+|  | 4096 | 262144 (1 GiB) |  |
+| **High-Performance Systems** | 512 | 8388608 (4 GiB) | For large-scale, high-performance systems where bulk transfers are critical. |
+|  | 4096 | 1048576 (4 GiB) |  |
+
+
+### **Queue Depth**
+
+| **Environment** | **Storage Type** | **Recommended `queue_depth`** | **Explanation** |
+| --- | --- | --- | --- |
+| **Traditional HDD** | Single HDD (e.g., SATA) | 16–32 | HDDs can’t handle high parallelism; lower values prevent excessive queuing and lower latency. |
+|  | RAID-backed HDD | 32–64 | With RAID, I/O parallelism slightly improves, so a moderate queue depth is better. |
+| **SSD / SATA SSD** | Single SATA SSD | 64–128 | SATA SSDs handle multiple outstanding I/O, but queuing too much can increase latency. |
+|  | RAID Array of SSDs | 128–256 | RAID arrays benefit from higher IOPS due to parallel SSDs. |
+| **NVMe SSD** | NVMe drives | 256–1024+ | NVMe drives have extremely high queues (native queue depth: 64k), so high values improve throughput. |
+| **Thin-Provisioned Storage** | Thin-Provisioned LUNs | 64–128 | Moderately high queue depths work best for space reclamation operations like VMware UNMAP. |
+| **VMware Environments** | SSD-backed LUNs | 64–256 | VMware recommends medium to high queue depths for SSD-backed VMFS/vSAN datastores. |
+|  | NVMe-backed LUNs | 256–1024 | VMware supports higher queue depths for NVMe due to its high IOPS nature. |
+| **iSER (iSCSI over RDMA)** | RDMA-backed storage target | 256–1024+ | iSER supports high concurrency and very low latency, so higher queue depths maximize performance. |
+
+
+### **Segment Lengths**
+| **NIC/Network Type** | **Recommended MaxRecvDataSegmentLength** | **Recommended MaxXmitDataSegmentLength** | **Explanation** |
+| --- | --- | --- | --- |
+| **1 GbE iSCSI** | **128 KiB (131072)** | **128 KiB (131072)** | A low-speed network does not benefit from large segment sizes due to packet fragmentation. |
+| **10 GbE iSCSI** | **256 KiB (262144)** | **256 KiB (262144)** | 10 GbE can handle larger transfers efficiently with minimal latency, making 256 KiB ideal. |
+| **25 GbE iSCSI or iSER** | **512 KiB (524288)** | **512 KiB (524288)** | High-speed networks benefit from larger segments that reduce the number of PDUs per transfer. |
+| **iSER (RDMA)** | **1 MiB (1048576)** | **1 MiB (1048576)** | RDMA can handle larger single operations due to its low-latency and zero-copy architecture. |
+| **NVMe-oF Backends** | **1–4 MiB** | **1–4 MiB** | For NVMe-oF via iSCSI, use larger segment lengths to reduce overhead during high IOPS workloads. |
+| **Legacy/extremely slow devices** | **64 KiB (65536)** | **64 KiB (65536)** | For very low-speed environments, small segment sizes help prevent memory overcommitment and retries. |
+
+
+
+### **Here's some other settings that are good for thin and thick provisioning**:
+`emulate_tpu` 1
+
+`emulate_tpws` 1
+
 ## Known Issues
 - Doesn't handle subprocesses from apt particularly well. (Keep hitting return or rerun option if stuck)
 
