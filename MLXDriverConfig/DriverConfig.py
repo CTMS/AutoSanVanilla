@@ -294,7 +294,7 @@ def check_and_configure_mellanox_devices(binary_path, is_truenas):
         "NUM_OF_PFC_P1": "4",
         "NUM_OF_PFC_P2": "4",
         "PF_LOG_BAR_SIZE": "6",
-        "PF_LOG_BAR_SIZE": "1",
+        "VF_LOG_BAR_SIZE": "1",
     }
 
     if is_truenas:

@@ -96,9 +96,6 @@ def optimize_esxi():
     print("\nIncreasing iSER Max Command Queue")
     execute_command("esxcli system module parameters set -m iser -p 'iser_LunQDepth=256'")
 
-    print("\nEnabling qlnativefc")
-    execute_command("esxcli system module load -m qlnativefc")
-
 
     iscsi_commands = [
         "esxcli system settings advanced set -o /ISCSI/SocketRcvBufLenKB -i 2048",
@@ -107,11 +104,12 @@ def optimize_esxi():
         "esxcli system settings advanced set -o /Disk/SchedQControlSeqReqs -i 256",
         "esxcli system settings advanced set -o /ISCSI/MaxIoSizeKB -i 256",
         "esxcli system settings advanced set -o /Net/NetSchedHClkMQ -i 1",
-        "esxcli system module parameters set -m iscsi_vmk -p 'iscsivmk_LunQDepth=256 iscsivmk_HostQDepth=2048 iscsivmk_InitialR2T=0 iscsivmk_MaxChannels=4 iscsivmk_MaxR2T=8 iscsivmk_ImmData=1'",
+        "esxcli system module parameters set -m iscsi_vmk -p 'iscsivmk_LunQDepth=256 iscsivmk_HostQDepth=2048 iscsivmk_InitialR2T=1 iscsivmk_MaxChannels=4 iscsivmk_MaxR2T=8 iscsivmk_ImmData=1'",
         "esxcli system settings advanced set -o /Disk/SchedCostUnit -i 65536",
         "esxcli system settings advanced set -o /Disk/SchedQCleanupInterval -i 120",
         "esxcli system settings advanced set -o /Disk/QFullThreshold -i 16",
-        "esxcli system settings advanced set -o /Disk/ReqCallThreshold -i 4"
+        "esxcli system settings advanced set -o /Disk/ReqCallThreshold -i 4",
+        "esxcli system settings advanced set -o /Disk/SchedQuantum -i 32"
     ]
     print("\nSetting iSCSI buffers and Queues...")
     execute_commands(iscsi_commands, execute_command)
@@ -124,8 +122,11 @@ def optimize_esxi():
     execute_commands(tcp_commands, execute_command)
 
     print("\nSetting Path options for AULA and PSP")
-    execute_command("esxcli storage nmp satp rule add -s VMW_SATP_ALUA -c tpgs_on -P VMW_PSP_FIXED -e 'CTMS DC' -f")
-    execute_command("esxcli storage nmp satp set -s VMW_SATP_ALUA -P VMW_PSP_FIXED -b")
+    alua_commands = [
+        "esxcli storage nmp satp rule add -s VMW_SATP_ALUA -c tpgs_on -P VMW_PSP_FIXED -e 'CTMS DC' -f",
+        "esxcli storage nmp satp set -s VMW_SATP_ALUA -P VMW_PSP_FIXED -b""
+    ]
+    execute_commands(alua_commands, execute_command)
     print("\nESXi optimization completed successfully!")
 
 
