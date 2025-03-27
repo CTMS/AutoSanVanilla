@@ -124,7 +124,7 @@ def optimize_esxi():
     print("\nSetting Path options for AULA and PSP")
     alua_commands = [
         "esxcli storage nmp satp rule add -s VMW_SATP_ALUA -c tpgs_on -P VMW_PSP_FIXED -e 'CTMS DC' -f",
-        "esxcli storage nmp satp set -s VMW_SATP_ALUA -P VMW_PSP_FIXED -b""
+        "esxcli storage nmp satp set -s VMW_SATP_ALUA -P VMW_PSP_FIXED -b"
     ]
     execute_commands(alua_commands, execute_command)
     print("\nESXi optimization completed successfully!")
