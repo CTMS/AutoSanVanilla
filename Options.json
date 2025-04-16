@@ -8,7 +8,7 @@
     ]
   },
   "formatOptions": {
-    "xfs": "mkfs.xfs -b size=65536 -d su=128k,sw=1 -l size=512m -m reflink=1",
+    "xfs": "mkfs.xfs -b size=65536 -d su=64k,sw=1 -l size=512m -m reflink=1",
     "xfs64": "mkfs.xfs -f -b size=4096 -d agcount=4 -i maxpct=25 -s size=512 -l size=64m,lazy-count=1 -m crc=1,finobt=1,rmapbt=1,reflink=1 -r extsize=4096"
   },
   "network": {

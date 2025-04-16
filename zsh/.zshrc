@@ -27,6 +27,7 @@ alias ls='ls --color=auto'
 alias grep='grep --color=auto'
 alias fgrep='fgrep --color=auto'
 alias egrep='egrep --color=auto'
+alias grep='grep -i --color=auto'
 
 autoload -Uz colors && colors
 export LS_COLORS="di=34:ln=35:so=32:pi=33:ex=31:bd=36:cd=36:su=37"
@@ -44,3 +45,5 @@ SAVEHIST=5000
 setopt HIST_IGNORE_ALL_DUPS
 setopt SHARE_HISTORY
 setopt APPEND_HISTORY
+
+PATH=/opt/mellanox/ethtool/sbin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/sbin:/usr/local/bin

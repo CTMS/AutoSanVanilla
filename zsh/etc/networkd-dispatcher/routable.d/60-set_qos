@@ -1,0 +1,31 @@
+#!/bin/bash
+
+# this goes into /etc/networkd-dispatcher/routable.d
+# Extract interfaces and devices from `rdma link show`
+if ! command -v rdma &> /dev/null; then
+  echo "rdma command not found..."
+  exit 1
+fi
+
+interfaces=($(rdma link show | awk '{print $NF}')) # Get netdev (last field)
+devices=($(rdma link show | awk '{print $2}' | cut -d'/' -f1 | sort -u)) # Get unique device names
+
+# Configure each interface dynamically
+for iface in "${interfaces[@]}"; do
+
+  echo 'auto' > /sys/class/net/$iface/settings/pfc_stall_prevention
+
+  echo "Configuring QoS interface $iface..."
+  mlnx_qos -i "$iface" --cable_len=3 --trust=dscp --pfc 0,0,0,0,0,0,1,0
+  mlnx_qos -i "$iface" --tsa=ets,ets,ets,ets,ets,ets,ets,ets --prio_tc=0,1,2,2,2,2,2,2 --tcbw=50,0,50,0,0,0,0,0 --dscp2prio='set,26,6'
+done
+
+# Configure each device dynamically
+for device in "${devices[@]}"; do
+  echo "Configuring device $device..."
+  cma_roce_tos -d "$device" -t 192
+
+  echo 192 > /sys/class/infiniband/$device/tc/1/traffic_class
+done
+
+exit 0

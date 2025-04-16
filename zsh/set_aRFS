@@ -1,0 +1,24 @@
+#!/bin/bash
+
+# Prompt the user for the interface if not provided as an argument
+if [ -z "$1" ]; then
+  read -p "Enter the network interface (e.g., ens6): " INTERFACE
+else
+  INTERFACE="$1"
+fi
+
+# Verify the interface exists
+if ! ip link show "$INTERFACE" &> /dev/null; then
+  echo "Error: Interface $INTERFACE does not exist."
+  exit 1
+fi
+
+echo 32768 > /proc/sys/net/core/rps_sock_flow_entries
+
+# Get the number of combined channels for the chosen interface
+NUM_CHANNELS=`ethtool -l $INTERFACE | grep "Combined:" | tail -1 | awk '{print $2}'`
+
+# Set RPS flow count for each receive queue
+for f in `seq 0 $((NUM_CHANNELS-1))`; do
+  echo 32768 > "/sys/class/net/$INTERFACE/queues/rx-$f/rps_flow_cnt"
+done

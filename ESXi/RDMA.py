@@ -172,13 +172,13 @@ def set_iscsi_buffer_size(adapter_name, max_recv=8192, max_xmit=8192):
 
         send_command = [
             "esxcli", "iscsi", "adapter", "param", "set",
-            "-A", adapter_name, "-k", "MaxBurstLength", "-v", str(max_xmit)
+            "-A", adapter_name, "-k", "MaxBurstLength", "-v", "65536"
         ]
         subprocess.run(send_command, check=True, text=True)
 
         first_command = [
             "esxcli", "iscsi", "adapter", "param", "set",
-            "-A", adapter_name, "-k", "FirstBurstLength", "-v", str(max_xmit)
+            "-A", adapter_name, "-k", "FirstBurstLength", "-v", "65536"
         ]
         subprocess.run(first_command, check=True, text=True)
         print(f"Set MaxBurstLength to {max_xmit} for adapter {adapter_name}.")

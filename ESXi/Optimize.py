@@ -6,13 +6,18 @@ def get_user_inputs():
     """
     Get user input for optimization parameters with validation against minimum and maximum allowed values.
     :return: A dictionary containing all validated user inputs for the optimization parameters.
+    esxcli system module parameters set -m nmlx5_core -p 'max_vfs=8 GEN_RSS=4 RSS=16 DRSS=32 DYN_RSS=1 max_queues=32'
+    More conservative:
+    esxcli system module parameters set -m nmlx5_core -p 'max_vfs=8 GEN_RSS=0 DRSS=32 DYN_RSS=1 max_queues=64 trust_state=2'
     """
     limits = {
-        "max_vfs": {"min": 1, "max": 16},
-        "max_queues": {"min": 1, "max": 32},
-        "RSS": {"min": 1, "max": 32},
+        "max_vfs": {"min": 1, "max": 8},
+        "max_queues": {"min": 1, "max": 64},
+        "RSS": {"min": 1, "max": 16},
         "DYN_RSS": {"min": 0, "max": 1},
-        "DRSS": {"min": 1, "max": 32}
+        "DRSS": {"min": 1, "max": 32},
+        "GEN_RSS":{"min":0, "max": 4},
+        "trust_state": {"min",1, "max":2 }
     }
     user_inputs = {}
     print("Welcome to ESXi Optimization Configuration!")
@@ -89,44 +94,66 @@ def optimize_esxi():
         f'esxcli system module parameters set -m nmlx5_core '
         f'-p "max_vfs={user_inputs["max_vfs"]} '
         f'max_queues={user_inputs["max_queues"]} RSS={user_inputs["RSS"]} '
-        f'DYN_RSS={user_inputs["DYN_RSS"]} DRSS={user_inputs["DRSS"]}"'
+        f'DYN_RSS={user_inputs["DYN_RSS"]} DRSS={user_inputs["DRSS"]} GEN_RSS={user_inputs["GEN_RSS"]} trust_state={user_inputs["trust_state"]}"'
     ))
+    print("\nSetting nmlx5_rdma priority 3...")
+    execute_command("esxcli system module parameters set -m nmlx5_rdma")
     print("\nVerifying nmlx5_core module parameters...")
     execute_command("esxcli system module parameters list -m nmlx5_core")
     print("\nIncreasing iSER Max Command Queue")
-    execute_command("esxcli system module parameters set -m iser -p 'iser_LunQDepth=256'")
+    execute_command("esxcli system module parameters set -m iser -p 'iser_LunQDepth=254'")
 
 
     iscsi_commands = [
+        "esxcli system module parameters set -m nmlx5_rdma -p 'enable_nmlx_debug=1 dscp_force=48'",
         "esxcli system settings advanced set -o /ISCSI/SocketRcvBufLenKB -i 2048",
         "esxcli system settings advanced set -o /ISCSI/SocketSndBufLenKB -i 2048",
-        "esxcli system settings advanced set -o /Disk/SchedQuantum -i 16",
-        "esxcli system settings advanced set -o /Disk/SchedQControlSeqReqs -i 256",
-        "esxcli system settings advanced set -o /ISCSI/MaxIoSizeKB -i 256",
+        "esxcli system settings advanced set -o /Disk/SchedQControlSeqReqs -i 128",
+        "esxcli system settings advanced set -o /ISCSI/MaxIoSizeKB -i 256", # this is regular iscsi's max
         "esxcli system settings advanced set -o /Net/NetSchedHClkMQ -i 1",
-        "esxcli system module parameters set -m iscsi_vmk -p 'iscsivmk_LunQDepth=256 iscsivmk_HostQDepth=2048 iscsivmk_InitialR2T=1 iscsivmk_MaxChannels=4 iscsivmk_MaxR2T=8 iscsivmk_ImmData=1'",
+        "esxcli system module parameters set -m iscsi_vmk -p 'iscsivmk_LunQDepth=128 iscsivmk_HostQDepth=1024 iscsivmk_InitialR2T=1 iscsivmk_MaxChannels=4 iscsivmk_MaxR2T=4 iscsivmk_ImmData=1'",
         "esxcli system settings advanced set -o /Disk/SchedCostUnit -i 65536",
         "esxcli system settings advanced set -o /Disk/SchedQCleanupInterval -i 120",
-        "esxcli system settings advanced set -o /Disk/QFullThreshold -i 16",
-        "esxcli system settings advanced set -o /Disk/ReqCallThreshold -i 4",
-        "esxcli system settings advanced set -o /Disk/SchedQuantum -i 32"
+        "esxcli system settings advanced set -o /Disk/QFullThreshold -i 8",
+        "esxcli system settings advanced set -o /Disk/ReqCallThreshold -i 8",
+        "esxcli system settings advanced set -o /Disk/SchedQuantum -i 16" # use 32 for 32 i/o's a world
     ]
     print("\nSetting iSCSI buffers and Queues...")
     execute_commands(iscsi_commands, execute_command)
     tcp_commands = [
         "esxcli system settings advanced set -o /Net/TcpipHeapMax -i 1024",
-        "esxcli system settings advanced set -o /Net/TcpipHeapSize -i 128",
+        "esxcli system settings advanced set -o /Net/TcpipHeapSize -i 32",
         "esxcli system settings advanced set -o /Net/TcpipRxDispatchQueues -i 4"
+        # For network ring sizes
+        "esxcli network nic ring current set -n vmnic6 -r 1024 -t 1024",
+        "esxcli network nic ring current set -n vmnic7 -r 1024 -t 1024",
+        "esxcli network nic coalesce set -n vmnic6 -t 3 -T 32 -r 3 -R 64",
+        "esxcli network nic coalesce set -n vmnic7 -t 3 -T 32 -r 3 -R 64",
     ]
     print("\nSetting TCP/IP stack and receive queue configurations...")
     execute_commands(tcp_commands, execute_command)
 
     print("\nSetting Path options for AULA and PSP")
     alua_commands = [
-        "esxcli storage nmp satp rule add -s VMW_SATP_ALUA -c tpgs_on -P VMW_PSP_FIXED -e 'CTMS DC' -f",
-        "esxcli storage nmp satp set -s VMW_SATP_ALUA -P VMW_PSP_FIXED -b"
+#         "esxcli storage nmp satp rule add -s VMW_SATP_ALUA -c tpgs_on -P VMW_PSP_FIXED -e 'CTMS DC' -f",
+        "esxcli storage nmp satp rule add -s VMW_SATP_ALUA -V 'CTMS-SAN' -c tpgs_on -O 'policy=latency;samplingCycles=32;latencyEvalTime=180000;useANO=1' -P VMW_PSP_RR -o throttle_sll -e 'CTMS DC RR' -f",
+#         "esxcli storage nmp satp set -s VMW_SATP_ALUA -P VMW_PSP_FIXED -b"
+        "esxcli storage nmp satp set -s VMW_SATP_ALUA -P VMW_PSP_RR -b"
     ]
     execute_commands(alua_commands, execute_command)
+
+    print("\nSetting VAAI Rules")
+    vaai_commands = [
+        "esxcli storage core claimrule add -t vendor -V 'LIO-ORG' -P VAAI_FILTER -c Filter --autoassign",
+        "esxcli storage core claimrule add -t vendor -V 'CTMS-SAN' -P VAAI_FILTER -c Filter --autoassign",
+        "esxcli storage core claimrule load -c Filter",
+        "esxcli storage core claimrule add -t vendor -V 'LIO-ORG' -P VMW_VAAIP_T10 -c VAAI --autoassign -e -a -s",
+        "esxcli storage core claimrule add -t vendor -V 'CTMS-SAN' -P VMW_VAAIP_T10 -c VAAI --autoassign -e -a -s",
+        "esxcli storage core claimrule load -c VAAI",
+        "esxcli storage core claimrule run --claimrule-class=Filter"
+    ]
+
+    execute_commands(vaai_commands, execute_command)
     print("\nESXi optimization completed successfully!")
 
 

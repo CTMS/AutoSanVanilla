@@ -1,0 +1,32 @@
+network:
+  version: 2
+  ethernets:
+    enp1s0f0:
+      addresses:
+        - "10.15.1.47/24"
+      nameservers:
+        addresses:
+          - 8.8.8.8
+          - 1.1.1.1
+        search: []
+      routes:
+        - to: "default"
+          via: "10.15.1.253"
+    ens1f0np0:
+      addresses:
+        - "10.80.80.47/22"
+      nameservers:
+        addresses:
+          - 1.1.1.1
+          - 8.8.8.8
+        search: []
+      mtu: 9000
+    ens1f1np1:
+      addresses:
+        - "10.80.82.47/22"
+      nameservers:
+        addresses:
+          - 1.1.1.1
+          - 8.8.8.8
+        search: []
+      mtu: 9000

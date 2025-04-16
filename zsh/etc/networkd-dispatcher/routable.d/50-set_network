@@ -1,0 +1,29 @@
+#!/bin/bash
+# This gets copied to /etc/networkd-dispatcher/routable.d/50-set_network
+# Extract network interfaces from `rdma link show`
+interfaces=$(rdma link show | awk '/netdev/ {print $NF}')
+
+# Loop through each interface and set ring parameters
+for iface in $interfaces; do
+   echo "Configuring ring, pause, and coalesce settings for interface: $iface"
+
+   # Optimizes network settings on boot or run of this script
+   /sbin/ip link set $face txqueuelen 3000
+
+   # Set our ring settings
+   /usr/sbin/ethtool -G $iface rx 1024 tx 1024
+
+   # setting pause frames
+   /usr/sbin/ethtool -A $iface rx on tx on
+
+   # coalesce settings
+   /usr/sbin/ethtool -C $iface rx-usecs 3 tx-usecs 3 rx-frames 64 tx-frames 32 adaptive-tx off adaptive-rx on
+
+   # special features but turning them off
+   /usr/sbin/ethtool -K $iface rx-gro-list on rx-udp-gro-forwarding on ntuple-filters on
+
+   /usr/sbin/ethtool --set-priv-flags $iface tx_xdp_hw_checksum on
+
+   # Optionally log or print confirmation
+   /sbin/ethtool -g $iface
+done

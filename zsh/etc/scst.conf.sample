@@ -1,0 +1,125 @@
+TARGET_DRIVER copy_manager {
+        TARGET copy_manager_tgt {
+                LUN 0 lun4k
+        }
+}
+
+HANDLER vdisk_fileio {
+
+}
+
+HANDLER vdisk_blockio {
+    DEVICE lun4k {
+        filename /dev/zvol/dpool/lun4k
+        # Set device access attributes
+        blocksize 512
+        #nv_cache 1
+        read_only 0
+        write_through 1
+        #lb_per_pb_exp 3 # 512 / 4k
+        iomode direct
+        #threads_pool_size 32
+        prod_id "iSCSI Disk"
+        rotational 0
+        t10_vend_id "CTMS-SAN"
+        t10_dev_id make_t10_dev_id
+        #naa_id make_t10_dev_id
+        #threads_num 64
+        max_tgt_dev_commands 254
+        max_queue_depth 254
+
+    }
+}
+
+
+DEVICE_GROUP multi {
+
+    DEVICE lun4k
+
+    TARGET_GROUP PathPrimary {
+        group_id 1
+        state optimized
+
+        preferred 1
+
+        TARGET iqn.2025-05.RackZilla.ctl:iscsi
+        TARGET iqn.2025-05.RackZilla.ctl:iser
+    }
+
+    TARGET_GROUP PathSecondary {
+        group_id 2
+        state optimized
+
+        preferred 0
+#        TARGET iqn.2025-05.RackZilla.ctl:iscsi
+#        TARGET iqn.2025-05.RackZilla.ctl:iser
+    }
+
+}
+
+
+TARGET_DRIVER iscsi {
+    enabled 1
+    listen_address "10.80.80.47 10.80.82.47"
+    link_local 0
+    TARGET iqn.2025-05.RackZilla.ctl:iscsi {
+        allowed_portal 10.80.80.47
+        rel_tgt_id 1
+        enabled 1
+
+        LUN 0 lun4k
+        # Authentication (optional):
+        # IncomingUsername initiator_user
+        # IncomingPassword strong_password
+        MaxRecvDataSegmentLength 262144
+        MaxXmitDataSegmentLength 262144
+        FirstBurstLength 65536
+        MaxBurstLength 262144
+        MaxOutstandingR2T 4
+        MaxConnections 32
+        QueuedCommands 254
+        InitialR2T Yes
+        ImmediateData Yes
+        DataPDUInOrder Yes
+        DataSequenceInOrder Yes
+        ErrorRecoveryLevel 1
+        HeaderDigest None
+        DataDigest None
+        OFMarker No
+        IFMarker No
+        OFMarkInt 2048
+        IFMarkInt 2048
+        RDMAExtensions No
+
+    }
+    # iSER target only
+    TARGET iqn.2025-05.RackZilla.ctl:iser {
+        allowed_portal 10.80.82.47
+        rel_tgt_id 2
+        enabled 1
+
+        LUN 0 lun4k
+        # Authentication (optional):
+        # IncomingUsername initiator_user
+        # IncomingPassword strong_password
+        MaxRecvDataSegmentLength 8192
+        MaxXmitDataSegmentLength 8192
+        FirstBurstLength 65536
+        MaxBurstLength 262144
+        MaxOutstandingR2T 4
+        MaxConnections 16
+        QueuedCommands 254
+        InitialR2T Yes
+        ImmediateData Yes
+        DataPDUInOrder Yes
+        DataSequenceInOrder Yes
+        ErrorRecoveryLevel 1
+        HeaderDigest None
+        DataDigest None
+        OFMarker No
+        IFMarker No
+        OFMarkInt 2048
+        IFMarkInt 2048
+    }
+
+}

@@ -1,0 +1,7 @@
+ esxcli storage core claimrule add -t vendor -V 'LIO-ORG' -P VAAI_FILTER -c Filter --autoassign
+ esxcli storage core claimrule add -t vendor -V 'CTMS-SAN' -P VAAI_FILTER -c Filter --autoassign
+ esxcli storage core claimrule load -c Filter
+ esxcli storage core claimrule add -t vendor -V 'LIO-ORG' -P VMW_VAAIP_T10 -c VAAI --autoassign -e -a -s
+ esxcli storage core claimrule add -t vendor -V 'CTMS-SAN' -P VMW_VAAIP_T10 -c VAAI --autoassign -e -a -s
+ esxcli storage core claimrule load -c VAAI
+ esxcli storage core claimrule run --claimrule-class=Filter

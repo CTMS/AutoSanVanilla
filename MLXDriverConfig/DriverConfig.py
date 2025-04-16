@@ -281,7 +281,7 @@ def check_and_configure_mellanox_devices(binary_path, is_truenas):
     # Define required settings and their expected values
     required_settings = {
         "SAFE_MODE_ENABLE": "0",
-        "NUM_OF_VFS": "16",
+        "NUM_OF_VFS": "8",
         "VF_VPD_ENABLE": "1",
         "SRIOV_EN": "1",
         "NUM_PF_MSIX": "64",
@@ -291,10 +291,14 @@ def check_and_configure_mellanox_devices(binary_path, is_truenas):
         "EXP_ROM_UEFI_x86_ENABLE": "1",
         "UEFI_HII_EN": "1",
         "EXP_ROM_PXE_ENABLE": "1",
-        "NUM_OF_PFC_P1": "4",
-        "NUM_OF_PFC_P2": "4",
+        "NUM_OF_PFC_P1": "8",
+        "NUM_OF_PFC_P2": "8",
         "PF_LOG_BAR_SIZE": "6",
         "VF_LOG_BAR_SIZE": "1",
+        "CNP_DSCP_P2": "48",
+        "CNP_DSCP_P1": "48",
+        "CNP_802P_PRIO_P2": "6",
+        "CNP_802P_PRIO_P1": "6",
     }
 
     if is_truenas:

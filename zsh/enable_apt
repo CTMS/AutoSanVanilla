@@ -1,0 +1,7 @@
+#!/bin/bash
+mount -o remount,rw boot-pool/ROOT/24.10.2
+mount -o remount,rw boot-pool/ROOT/24.10.2/usr
+mount -o remount,rw boot-pool/ROOT/24.10.2/opt
+mount -o remount,rw boot-pool/ROOT/24.10.2/var
+chmod +x /bin/apt*
+chmod +x /usr/bin/dpkg

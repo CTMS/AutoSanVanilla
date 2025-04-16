@@ -226,6 +226,7 @@ def main():
         ensure_required_packages_installed()
 
         # Step 6: Reload all required kernel modules
+
         print("Reloading all required kernel modules...")
         reload_all_required_kernel_modules()
 

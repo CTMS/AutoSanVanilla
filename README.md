@@ -302,7 +302,23 @@ sdj         H0H72121CLAR12T0           4096    4096   4096        0     256
 
 - **Next step**:
 ```
-echo "options zfs zvol_blk_mq_queue_depth=254 zvol_blk_mq_blocks_per_thread=16 zvol_use_blk_mq=1" >> /etc/modprobe.d/zfs.conf
+# 254 is done on purpose for a buffer on the i/o
+echo "options zfs zvol_blk_mq_queue_depth=254 zvol_blk_mq_blocks_per_thread=16 zvol_use_blk_mq=1" > /etc/modprobe.d/zfs.conf
+# Limit ARC so it doesn't over run your system memory.  Give the system 60-70% breathing room
+# In this case 192GB of 256GB's
+echo "options zfs zfs_arc_max=206158430208" >> /etc/modprobe.d/zfs.conf
+
+echo "options ib_core recv_queue_size=4096 send_queue_size=4096" > /etc/modprobe.d/ib_core.conf
+echo "options ib_isert sg_tablesize=4096" > /etc/modprobe.d/ib_isert.conf
+echo "options ib_iser pi_enable=1 max_sectors=4096" > /etc/modprobe.d/ib_iser.conf
+
+# the kernel is going to need us to reserve more memory for how much data that can be processed now
+echo "vm.min_free_kbytes=524288" >> /etc/sysctl.conf
+echo "net.core.rmem_default=262144" >> /etc/sysctl.conf
+echo "net.core.rmem_max=2097152" >> /etc/sysctl.conf
+echo "net.core.wmem_default=262144" >> /etc/sysctl.conf
+echo "net.core.wmem_max=2097152" >> /etc/sysctl.conf
+
 
 # Update Kernel
 update-initramfs -u
@@ -379,6 +395,13 @@ Most zfs setups will use 32Mib for I/O Optimization for ```max_unmap_lba_count``
 `emulate_tpu` 1
 
 `emulate_tpws` 1
+
+### **ESXi**:
+#### **Setting Round Robin Multipath**:
+- This changes the default `Round Robin` behavior from iops=1000 to latency.
+```esxicli
+esxcli storage nmp psp roundrobin deviceconfig set -d <device_id> -t latency -U true -S 32
+```
 
 ## Known Issues
 - Doesn't handle subprocesses from apt particularly well. (Keep hitting return or rerun option if stuck)
