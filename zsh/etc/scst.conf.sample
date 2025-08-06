@@ -20,7 +20,8 @@ HANDLER vdisk_blockio {
         iomode direct
         #threads_pool_size 32
         prod_id "iSCSI Disk"
-        rotational 0
+        # rotational 0..
+        rotational 1 # change depending on the drive
         t10_vend_id "CTMS-SAN"
         t10_dev_id make_t10_dev_id
         #naa_id make_t10_dev_id
